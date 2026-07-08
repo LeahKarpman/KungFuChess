@@ -7,6 +7,35 @@ VALID_COLORS = {"w", "b"}
 VALID_KINDS = {"K", "Q", "R", "B", "N", "P"}
 
 
+def _is_valid_king_move(dr, dc):
+    return max(abs(dr), abs(dc)) == 1
+
+
+def _is_valid_rook_move(dr, dc):
+    return dr == 0 or dc == 0
+
+
+def _is_valid_bishop_move(dr, dc):
+    return abs(dr) == abs(dc)
+
+
+def _is_valid_queen_move(dr, dc):
+    return _is_valid_rook_move(dr, dc) or _is_valid_bishop_move(dr, dc)
+
+
+def _is_valid_knight_move(dr, dc):
+    return {abs(dr), abs(dc)} == {1, 2}
+
+
+_MOVEMENT_VALIDATORS = {
+    "K": _is_valid_king_move,
+    "R": _is_valid_rook_move,
+    "B": _is_valid_bishop_move,
+    "Q": _is_valid_queen_move,
+    "N": _is_valid_knight_move,
+}
+
+
 class Piece:
     def __init__(self, token):
         self._token = token
@@ -30,6 +59,16 @@ class Piece:
         if self.is_empty:
             return None
         return self._token[1]
+
+    def can_move_to(self, from_row, from_col, to_row, to_col):
+        validator = _MOVEMENT_VALIDATORS.get(self.kind)
+        if validator is None:
+            return False
+        dr = to_row - from_row
+        dc = to_col - from_col
+        if dr == 0 and dc == 0:
+            return False
+        return validator(dr, dc)
 
     @staticmethod
     def is_valid_token(token):
@@ -151,10 +190,16 @@ class Game:
                 self._selected = (row, col)
             return
 
+        if (row, col) == self._selected:
+            return
+
         selected_piece = self._board.get_piece(*self._selected)
 
         if not piece.is_empty and piece.color == selected_piece.color:
             self._selected = (row, col)
+            return
+
+        if not selected_piece.can_move_to(*self._selected, row, col):
             return
 
         self._board.move_piece(*self._selected, row, col)

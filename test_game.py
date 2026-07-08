@@ -8,6 +8,75 @@ from game import Board
 from game import Game
 
 
+class PieceMoveTests(unittest.TestCase):
+
+    def test_king_valid_moves(self):
+        king = Piece("wK")
+        self.assertTrue(king.can_move_to(4, 4, 5, 4))
+        self.assertTrue(king.can_move_to(4, 4, 4, 5))
+        self.assertTrue(king.can_move_to(4, 4, 5, 5))
+        self.assertTrue(king.can_move_to(4, 4, 3, 3))
+
+    def test_king_invalid_moves(self):
+        king = Piece("wK")
+        self.assertFalse(king.can_move_to(4, 4, 6, 4))
+        self.assertFalse(king.can_move_to(4, 4, 4, 4))
+
+    def test_rook_valid_moves(self):
+        rook = Piece("wR")
+        self.assertTrue(rook.can_move_to(0, 0, 0, 5))
+        self.assertTrue(rook.can_move_to(0, 0, 5, 0))
+
+    def test_rook_invalid_moves(self):
+        rook = Piece("wR")
+        self.assertFalse(rook.can_move_to(0, 0, 3, 3))
+
+    def test_bishop_valid_moves(self):
+        bishop = Piece("wB")
+        self.assertTrue(bishop.can_move_to(0, 0, 3, 3))
+        self.assertTrue(bishop.can_move_to(4, 4, 1, 1))
+
+    def test_bishop_invalid_moves(self):
+        bishop = Piece("wB")
+        self.assertFalse(bishop.can_move_to(0, 0, 0, 3))
+        self.assertFalse(bishop.can_move_to(0, 0, 3, 2))
+
+    def test_queen_valid_moves(self):
+        queen = Piece("wQ")
+        self.assertTrue(queen.can_move_to(4, 4, 4, 7))
+        self.assertTrue(queen.can_move_to(4, 4, 7, 4))
+        self.assertTrue(queen.can_move_to(4, 4, 7, 7))
+
+    def test_queen_invalid_moves(self):
+        queen = Piece("wQ")
+        self.assertFalse(queen.can_move_to(4, 4, 6, 5))
+
+    def test_knight_valid_moves(self):
+        knight = Piece("wN")
+        self.assertTrue(knight.can_move_to(4, 4, 6, 5))
+        self.assertTrue(knight.can_move_to(4, 4, 2, 3))
+        self.assertTrue(knight.can_move_to(4, 4, 5, 6))
+
+    def test_knight_invalid_moves(self):
+        knight = Piece("wN")
+        self.assertFalse(knight.can_move_to(4, 4, 4, 6))
+        self.assertFalse(knight.can_move_to(4, 4, 6, 6))
+
+    def test_empty_piece_cannot_move(self):
+        empty = Piece(".")
+        self.assertFalse(empty.can_move_to(0, 0, 1, 1))
+
+    def test_no_piece_can_move_to_same_cell(self):
+        for token in ["wR", "wB", "wQ", "wK", "wN"]:
+            piece = Piece(token)
+            self.assertFalse(piece.can_move_to(4, 4, 4, 4), msg=f"{token} should not move to same cell")
+
+    def test_pawn_has_no_movement_in_iteration_3(self):
+        pawn = Piece("wP")
+        self.assertFalse(pawn.can_move_to(4, 4, 3, 4))
+        self.assertFalse(pawn.can_move_to(4, 4, 3, 3))
+
+
 class PieceTests(unittest.TestCase):
     def test_empty_piece(self):
 
@@ -135,7 +204,25 @@ class GameClickTests(unittest.TestCase):
         game = self._make_game(["wK ."], ["click 50 50", "click 150 50", "print board"])
         self.assertEqual(self._run_output(game), ". wK\n")
 
-    def test_click_enemy_piece_moves_selected_piece(self):
+    def test_invalid_move_is_ignored(self):
+        game = self._make_game(
+            ["wK . . ."], ["click 50 50", "click 350 50", "print board"]
+        )
+        self.assertEqual(self._run_output(game), "wK . . .\n")
+
+    def test_move_to_same_cell_is_ignored(self):
+        game = self._make_game(
+            ["wK ."], ["click 50 50", "click 50 50", "print board"]
+        )
+        self.assertEqual(self._run_output(game), "wK .\n")
+
+    def test_selection_preserved_after_illegal_move(self):
+        game = self._make_game(
+            ["wK . . ."], ["click 50 50", "click 350 50", "click 150 50", "print board"]
+        )
+        self.assertEqual(self._run_output(game), ". wK . .\n")
+
+    def test_click_enemy_piece_on_legal_destination_moves_selected_piece(self):
         game = self._make_game(
             ["wK bR"], ["click 50 50", "click 150 50", "print board"]
         )
@@ -152,6 +239,26 @@ class GameClickTests(unittest.TestCase):
             ["wK ."], ["click 50 50", "click 9999 9999", "print board"]
         )
         self.assertEqual(self._run_output(game), "wK .\n")
+
+    def test_rook_legal_move_via_click(self):
+        game = self._make_game(
+            ["wR . . ."], ["click 50 50", "click 350 50", "print board"]
+        )
+        self.assertEqual(self._run_output(game), ". . . wR\n")
+
+    def test_rook_diagonal_move_ignored_via_click(self):
+        game = self._make_game(
+            ["wR . . .", ". . . ."],
+            ["click 50 50", "click 150 150", "print board"]
+        )
+        self.assertEqual(self._run_output(game), "wR . . .\n. . . .\n")
+
+    def test_knight_legal_move_via_click(self):
+        game = self._make_game(
+            ["wN . .", ". . .", ". . ."],
+            ["click 50 50", "click 150 250", "print board"]
+        )
+        self.assertEqual(self._run_output(game), ". . .\n. . .\n. wN .\n")
 
 
 class GameTests(unittest.TestCase):
