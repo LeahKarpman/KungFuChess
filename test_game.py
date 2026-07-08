@@ -94,6 +94,66 @@ class BoardPrintTests(unittest.TestCase):
         self.assertEqual(output.getvalue(), "bR\n")
 
 
+class BoardPixelTests(unittest.TestCase):
+    def setUp(self):
+        self.board = Board()
+        self.board.load(["wK . .", ". bK ."])
+
+    def test_pixel_inside_board(self):
+        self.assertEqual(self.board.pixel_to_cell(50, 50), (0, 0))
+        self.assertEqual(self.board.pixel_to_cell(150, 50), (0, 1))
+        self.assertEqual(self.board.pixel_to_cell(50, 150), (1, 0))
+
+    def test_pixel_outside_board(self):
+        self.assertIsNone(self.board.pixel_to_cell(350, 50))
+        self.assertIsNone(self.board.pixel_to_cell(50, 250))
+
+    def test_negative_coordinates(self):
+        self.assertIsNone(self.board.pixel_to_cell(-1, 50))
+        self.assertIsNone(self.board.pixel_to_cell(50, -1))
+
+    def test_empty_board(self):
+        board = Board()
+        self.assertIsNone(board.pixel_to_cell(50, 50))
+
+
+class GameClickTests(unittest.TestCase):
+    def _make_game(self, board_lines, commands):
+        board_text = "\n".join(board_lines)
+        commands_text = "\n".join(commands)
+        game = Game()
+        game.load(f"Board:\n{board_text}\nCommands:\n{commands_text}\n")
+        return game
+
+    def _run_output(self, game):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            game.run()
+        return output.getvalue()
+
+    def test_click_moves_piece(self):
+        game = self._make_game(["wK ."], ["click 50 50", "click 150 50", "print board"])
+        self.assertEqual(self._run_output(game), ". wK\n")
+
+    def test_click_enemy_piece_moves_selected_piece(self):
+        game = self._make_game(
+            ["wK bR"], ["click 50 50", "click 150 50", "print board"]
+        )
+        self.assertEqual(self._run_output(game), ". wK\n")
+
+    def test_click_friendly_piece_replaces_selection(self):
+        game = self._make_game(
+            ["wK wQ ."], ["click 50 50", "click 150 50", "click 250 50", "print board"]
+        )
+        self.assertEqual(self._run_output(game), "wK . wQ\n")
+
+    def test_click_outside_board_ignored(self):
+        game = self._make_game(
+            ["wK ."], ["click 50 50", "click 9999 9999", "print board"]
+        )
+        self.assertEqual(self._run_output(game), "wK .\n")
+
+
 class GameTests(unittest.TestCase):
     def test_print_board(self):
 
@@ -103,9 +163,7 @@ wK .
 Commands:
 print board
 """
-
         game = Game()
-
         game.load(text)
 
         output = io.StringIO()
@@ -128,7 +186,6 @@ bR
 Commands:
 print board
 """
-
         game = Game()
         game.load(first)
         game.load(second)
@@ -146,7 +203,6 @@ print board
 wK xZ
 Commands:
 """
-
         game = Game()
 
         with self.assertRaises(ValueError):
