@@ -2,6 +2,8 @@ EMPTY_TOKEN = "."
 
 CELL_SIZE = 100
 
+SLIDING_KINDS = {"R", "B", "Q"}
+
 VALID_COLORS = {"w", "b"}
 
 VALID_KINDS = {"K", "Q", "R", "B", "N", "P"}
@@ -127,6 +129,37 @@ class Board:
 
         return (row, col)
 
+    def is_path_clear(self, from_row, from_col, to_row, to_col):
+        dr = to_row - from_row
+        dc = to_col - from_col
+        if dr != 0 and dc != 0 and abs(dr) != abs(dc):
+            return False
+        row_step = 0 if dr == 0 else dr // abs(dr)
+        col_step = 0 if dc == 0 else dc // abs(dc)
+        row = from_row + row_step
+        col = from_col + col_step
+        while (row, col) != (to_row, to_col):
+            if not self._rows[row][col].is_empty:
+                return False
+            row += row_step
+            col += col_step
+        return True
+
+    def can_move_piece(self, from_row, from_col, to_row, to_col):
+        source = self._rows[from_row][from_col]
+        destination = self._rows[to_row][to_col]
+        if source.is_empty:
+            return False
+        if not source.can_move_to(from_row, from_col, to_row, to_col):
+            return False
+        if not destination.is_empty and destination.color == source.color:
+            return False
+        if source.kind in SLIDING_KINDS and not self.is_path_clear(
+            from_row, from_col, to_row, to_col
+        ):
+            return False
+        return True
+
     def get_piece(self, row, col):
         return self._rows[row][col]
 
@@ -199,7 +232,7 @@ class Game:
             self._selected = (row, col)
             return
 
-        if not selected_piece.can_move_to(*self._selected, row, col):
+        if not self._board.can_move_piece(*self._selected, row, col):
             return
 
         self._board.move_piece(*self._selected, row, col)
