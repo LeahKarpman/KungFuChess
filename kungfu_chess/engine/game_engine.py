@@ -23,7 +23,12 @@ class _Jump:
 
 
 class GameEngine:
-    def __init__(self, board: Board, rule_engine: RuleEngine | None = None, arbiter: RealTimeArbiter | None = None) -> None:
+    def __init__(
+        self,
+        board: Board,
+        rule_engine: RuleEngine | None = None,
+        arbiter: RealTimeArbiter | None = None,
+    ) -> None:
         self._board = board
         self._rules = rule_engine or RuleEngine()
         self._arbiter = arbiter or RealTimeArbiter()
@@ -37,27 +42,27 @@ class GameEngine:
 
     def request_move(self, src: Position, dst: Position) -> MoveResult:
         if self._game_over:
-            return MoveResult(ok=False, reason='game_over')
+            return MoveResult(ok=False, reason="game_over")
         if self._arbiter.has_active_motion():
-            return MoveResult(ok=False, reason='motion_in_progress')
+            return MoveResult(ok=False, reason="motion_in_progress")
         if self._jump is not None and dst == self._jump.landing:
             piece = self._board.get_piece(src)
             jumper = self._airborne.get(self._jump.piece_id)
             if jumper is not None and piece is not None and piece.color == jumper.color:
-                return MoveResult(ok=False, reason='landing_reserved')
+                return MoveResult(ok=False, reason="landing_reserved")
         validation = self._rules.validate_move(self._board, src, dst)
         if not validation.ok:
             return MoveResult(ok=False, reason=validation.reason)
         piece = self._board.get_piece(src)
         self._arbiter.start_motion(piece.id, src, dst)
-        return MoveResult(ok=True, reason='ok')
+        return MoveResult(ok=True, reason="ok")
 
     def jump(self, pos: Position) -> None:
         """Remove a friendly piece from the board temporarily; it lands back after MS_PER_CELL."""
         if self._jump is not None:
             return
         piece = self._board.get_piece(pos)
-        if piece is None or piece.color != 'w':
+        if piece is None or piece.color != "w":
             return
         self._board.remove_piece(pos)
         self._airborne[piece.id] = piece
@@ -80,9 +85,9 @@ class GameEngine:
                 return
             target = self._board.get_piece(landing)
             if target and target.color != piece.color:
-                target.state = 'captured'
+                target.state = "captured"
                 self._board.remove_piece(landing)
-                if target.kind == 'K':
+                if target.kind == "K":
                     self._game_over = True
             if not self._board.get_piece(landing):
                 piece.cell = landing
@@ -98,31 +103,36 @@ class GameEngine:
             return
         target = self._board.get_piece(event.destination)
         if target:
-            target.state = 'captured'
+            target.state = "captured"
             self._board.remove_piece(event.destination)
-            if target.kind == 'K':
+            if target.kind == "K":
                 self._game_over = True
         piece.cell = event.destination
         self._board.add_piece(piece)
         self._try_promote(piece)
 
     def _try_promote(self, piece: Piece) -> None:
-        if piece.kind != 'P':
+        if piece.kind != "P":
             return
-        promotion_row = 0 if piece.color == 'w' else self._board.height - 1
+        promotion_row = 0 if piece.color == "w" else self._board.height - 1
         if piece.cell.row == promotion_row:
-            piece.kind = 'Q'
+            piece.kind = "Q"
 
     def snapshot(self, selected: Position | None = None) -> GameSnapshot:
         pieces = tuple(
             PieceSnapshot(p.id, p.color, p.kind, p.cell, p.state)
             for p in self._board.all_pieces()
         )
-        motions: tuple[MotionSnapshot, ...] = ()
-        m = self._arbiter.current_motion()
-        if m:
-            motions = (MotionSnapshot(m.piece_id, m.source, m.destination,
-                                      m.elapsed_ms, m.duration_ms),)
+        motions = tuple(
+            MotionSnapshot(
+                motion.piece_id,
+                motion.source,
+                motion.destination,
+                motion.elapsed_ms,
+                motion.duration_ms,
+            )
+            for motion in self._arbiter.active_motions()
+        )
         return GameSnapshot(
             pieces=pieces,
             motions=motions,
