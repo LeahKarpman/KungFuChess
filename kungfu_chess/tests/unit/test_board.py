@@ -4,7 +4,12 @@ from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 
 
-def _make_piece(row, col, color='w', kind='K'):
+def _make_piece(
+    row: int,
+    col: int,
+    color: str = 'w',
+    kind: str = 'K',
+) -> Piece:
     pos = Position(row, col)
     return Piece(id=f"{color}{kind}_{row}_{col}", color=color, kind=kind, cell=pos)
 

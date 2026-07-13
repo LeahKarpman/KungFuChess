@@ -1,14 +1,15 @@
 import unittest
 from kungfu_chess.engine.rule_engine import RuleEngine
 from kungfu_chess.io.board_parser import parse_board
+from kungfu_chess.model.board import Board
 from kungfu_chess.model.position import Position
 
 
 class TestRookRules(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.rules = RuleEngine()
 
-    def _board(self, lines):
+    def _board(self, lines: list[str]) -> Board:
         return parse_board(lines)
 
     def test_rook_legal_destinations_empty_board(self):
@@ -28,7 +29,7 @@ class TestRookRules(unittest.TestCase):
         self.assertEqual(dests, expected)
 
     def test_rook_blocked_by_friendly(self):
-        # wP בשורה 1 — חוסם ידידותי ישיר מעל הרוק
+        # A friendly pawn directly above the rook blocks its path.
         board = self._board([
             '. . . . .',
             '. . wP . .',
@@ -37,11 +38,11 @@ class TestRookRules(unittest.TestCase):
             '. . . . .',
         ])
         dests = self.rules.legal_destinations(board, Position(2, 2))
-        self.assertNotIn(Position(1, 2), dests)   # תא החוסם עצמו — לא נגיש
-        self.assertNotIn(Position(0, 2), dests)   # מעבר לחוסם — לא נגיש
+        self.assertNotIn(Position(1, 2), dests)  # The friendly square is unavailable.
+        self.assertNotIn(Position(0, 2), dests)  # Squares beyond it are unavailable.
 
     def test_rook_includes_enemy_blocker(self):
-        # bP בשורה 1 — חוסם אויב ישיר מעל הרוק
+        # An enemy pawn directly above the rook blocks its path.
         board = self._board([
             '. . . . .',
             '. . bP . .',
@@ -50,8 +51,8 @@ class TestRookRules(unittest.TestCase):
             '. . . . .',
         ])
         dests = self.rules.legal_destinations(board, Position(2, 2))
-        self.assertIn(Position(1, 2), dests)    # תא האויב — נגיש (לכידה)
-        self.assertNotIn(Position(0, 2), dests) # מעבר לאויב — לא נגיש
+        self.assertIn(Position(1, 2), dests)  # The enemy square is capturable.
+        self.assertNotIn(Position(0, 2), dests)  # Squares beyond it are unavailable.
 
     def test_rook_cannot_pass_enemy_blocker(self):
         board = self._board([

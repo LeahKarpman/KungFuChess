@@ -23,9 +23,9 @@ class MotionSnapshot:
 
 @dataclass(frozen=True)
 class GameSnapshot:
-    pieces: tuple
-    motions: tuple
-    selected: object
+    pieces: tuple[PieceSnapshot, ...]
+    motions: tuple[MotionSnapshot, ...]
+    selected: Position | None
     game_over: bool
     width: int
     height: int

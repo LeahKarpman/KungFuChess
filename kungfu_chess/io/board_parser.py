@@ -6,7 +6,7 @@ from ..model.position import Position
 EMPTY = '.'
 
 
-def parse_board(lines):
+def parse_board(lines: list[str]) -> Board:
     if not lines:
         return Board(0, 0)
 

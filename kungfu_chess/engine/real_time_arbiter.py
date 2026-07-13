@@ -5,7 +5,7 @@ from ..model.position import Position
 MS_PER_CELL = 1000
 
 
-def _travel_time(source, destination):
+def _travel_time(source: Position, destination: Position) -> int:
     dr = abs(destination.row - source.row)
     dc = abs(destination.col - source.col)
     return max(dr, dc) * MS_PER_CELL
@@ -28,13 +28,13 @@ class ArrivalEvent:
 
 
 class RealTimeArbiter:
-    def __init__(self):
-        self._motion = None
+    def __init__(self) -> None:
+        self._motion: _Motion | None = None
 
-    def has_active_motion(self):
+    def has_active_motion(self) -> bool:
         return self._motion is not None
 
-    def start_motion(self, piece_id, source, destination):
+    def start_motion(self, piece_id: str, source: Position, destination: Position) -> None:
         self._motion = _Motion(
             piece_id=piece_id,
             source=source,
@@ -42,7 +42,7 @@ class RealTimeArbiter:
             duration_ms=_travel_time(source, destination),
         )
 
-    def advance_time(self, ms):
+    def advance_time(self, ms: int) -> list[ArrivalEvent]:
         if not self._motion:
             return []
         self._motion.elapsed_ms += ms
@@ -56,5 +56,5 @@ class RealTimeArbiter:
             return [event]
         return []
 
-    def current_motion(self):
+    def current_motion(self) -> _Motion | None:
         return self._motion

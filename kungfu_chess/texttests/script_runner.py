@@ -10,11 +10,11 @@ from ..engine.game_engine import GameEngine
 from ..controller.controller import Controller
 
 
-def run(lines):
+def run(lines: list[str]) -> None:
     commands = parse_script(lines)
-    engine = None
-    controller = None
-    mapper = None
+    engine: GameEngine | None = None
+    controller: Controller | None = None
+    mapper: BoardMapper | None = None
 
     for cmd in commands:
         if cmd[0] == 'board':
@@ -36,7 +36,6 @@ def run(lines):
             controller.click(cmd[1], cmd[2])
 
         elif cmd[0] == 'jump' and engine is not None:
-            # jump מופנה ישירות ל-GameEngine — אחריות תנועה, לא קלט משתמש
             pos = mapper.pixel_to_cell(cmd[1], cmd[2])
             if pos is not None:
                 engine.jump(pos)
@@ -45,6 +44,6 @@ def run(lines):
             engine.wait(cmd[1])
 
 
-def main():
+def main() -> None:
     lines = [line.rstrip('\n') for line in sys.stdin]
     run(lines)

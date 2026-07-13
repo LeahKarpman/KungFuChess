@@ -9,7 +9,7 @@ from kungfu_chess.engine.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.model.position import Position
 
 
-def _setup(lines):
+def _setup(lines: list[str]) -> tuple[Controller, GameEngine]:
     board = parse_board(lines)
     engine = GameEngine(board, RuleEngine(), RealTimeArbiter())
     mapper = BoardMapper(board.width, board.height)
@@ -49,8 +49,8 @@ class TestController(unittest.TestCase):
         )
         mapper = BoardMapper(3, 1)
         controller = Controller(mapper, mock_engine)
-        controller.click(50, 50)   # בחירה
-        result = controller.click(150, 50)  # יעד
+        controller.click(50, 50)  # Select the piece.
+        result = controller.click(150, 50)  # Request the destination.
         self.assertEqual(result.action, 'move_requested')
         mock_engine.request_move.assert_called_once_with(Position(0, 0), Position(0, 1))
         self.assertIsNone(controller.selected)
@@ -58,5 +58,6 @@ class TestController(unittest.TestCase):
     def test_selection_cleared_after_second_click_regardless_of_validity(self):
         controller, _ = _setup(['wR . .'])
         controller.click(50, 50)
-        controller.click(150, 50)  # מהלך (חוקי או לא — selection מתנקה)
+        # Selection is cleared whether the requested move is valid or not.
+        controller.click(150, 50)
         self.assertIsNone(controller.selected)

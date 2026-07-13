@@ -4,7 +4,7 @@ from kungfu_chess.model.position import Position
 
 
 class TestBoardMapper(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.mapper = BoardMapper(width=8, height=8)
 
     def test_x_0_to_99_maps_col_0(self):

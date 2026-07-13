@@ -4,10 +4,11 @@ from kungfu_chess.engine.game_engine import GameEngine, MoveResult
 from kungfu_chess.engine.rule_engine import RuleEngine, MoveValidation
 from kungfu_chess.engine.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.io.board_parser import parse_board
+from kungfu_chess.model.board import Board
 from kungfu_chess.model.position import Position
 
 
-def _engine(lines):
+def _engine(lines: list[str]) -> tuple[GameEngine, Board]:
     board = parse_board(lines)
     return GameEngine(board, RuleEngine(), RealTimeArbiter()), board
 

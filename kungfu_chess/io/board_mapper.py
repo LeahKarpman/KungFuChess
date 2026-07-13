@@ -5,12 +5,12 @@ CELL_SIZE = 100
 
 
 class BoardMapper:
-    def __init__(self, width: int, height: int, cell_size: int = CELL_SIZE):
+    def __init__(self, width: int, height: int, cell_size: int = CELL_SIZE) -> None:
         self._width = width
         self._height = height
         self._cell_size = cell_size
 
-    def pixel_to_cell(self, x: int, y: int):
+    def pixel_to_cell(self, x: int, y: int) -> Position | None:
         col = x // self._cell_size
         row = y // self._cell_size
         if 0 <= row < self._height and 0 <= col < self._width:

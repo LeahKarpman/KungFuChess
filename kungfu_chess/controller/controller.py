@@ -1,24 +1,27 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from ..model.position import Position
+from ..io.board_mapper import BoardMapper
+from ..engine.game_engine import GameEngine
 
 
 @dataclass(frozen=True)
 class ControllerResult:
     action: str
-    position: object = None
+    position: Position | None = None
 
 
 class Controller:
-    def __init__(self, mapper, engine):
+    def __init__(self, mapper: BoardMapper, engine: GameEngine) -> None:
         self._mapper = mapper
         self._engine = engine
-        self._selected = None
+        self._selected: Position | None = None
 
     @property
-    def selected(self):
+    def selected(self) -> Position | None:
         return self._selected
 
-    def click(self, x, y):
+    def click(self, x: int, y: int) -> ControllerResult:
         pos = self._mapper.pixel_to_cell(x, y)
 
         if pos is None:

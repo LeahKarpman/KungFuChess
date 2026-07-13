@@ -5,7 +5,7 @@ from kungfu_chess.texttests.script_runner import run
 
 
 class TestTextScripts(unittest.TestCase):
-    def _run(self, lines):
+    def _run(self, lines: list[str]) -> str:
         with patch('sys.stdout', new_callable=StringIO) as mock_out:
             run(lines)
             return mock_out.getvalue()
@@ -47,14 +47,14 @@ class TestTextScripts(unittest.TestCase):
         self.assertEqual(out, '. wR .\n. . .\n. . bK\n. . .\n. . .\n. wR bK\n')
 
     def test_second_move_while_motion_active_rejected(self):
-        # הרוק זז 2 תאים = 2000ms; ניסיון מהלך שני נדחה
+        # The rook moves two cells in 2000 ms; a second move is rejected.
         lines = [
             'Board',
             '. wR . .',
             '. . . .',
             'click 150 50',
             'click 350 50',
-            'click 150 50',   # אין כלי שם עוד — ignored
+            'click 150 50',
             'wait 2000',
             'print board',
         ]
@@ -92,5 +92,5 @@ class TestTextScripts(unittest.TestCase):
             'print board',
         ]
         out = self._run(lines)
-        # לאחר לכידת המלך — הלוח לא משתנה
+        # The board does not change after the king is captured.
         self.assertEqual(out, '. . wR\n. . wN\n. . .\n. . wR\n. . wN\n. . .\n')

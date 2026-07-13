@@ -1,8 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from ..model.board import Board
+from ..model.piece import Piece
 from ..model.position import Position
 from .rule_engine import RuleEngine
-from .real_time_arbiter import RealTimeArbiter, MS_PER_CELL
+from .real_time_arbiter import RealTimeArbiter, ArrivalEvent, MS_PER_CELL
 from .game_snapshot import GameSnapshot, PieceSnapshot, MotionSnapshot
 
 
@@ -21,19 +23,19 @@ class _Jump:
 
 
 class GameEngine:
-    def __init__(self, board, rule_engine=None, arbiter=None):
+    def __init__(self, board: Board, rule_engine: RuleEngine | None = None, arbiter: RealTimeArbiter | None = None) -> None:
         self._board = board
         self._rules = rule_engine or RuleEngine()
         self._arbiter = arbiter or RealTimeArbiter()
         self._game_over = False
-        self._airborne = {}   # piece_id -> Piece
-        self._jump = None     # _Jump | None
+        self._airborne: dict[str, Piece] = {}
+        self._jump: _Jump | None = None
 
     @property
-    def game_over(self):
+    def game_over(self) -> bool:
         return self._game_over
 
-    def request_move(self, src, dst):
+    def request_move(self, src: Position, dst: Position) -> MoveResult:
         if self._game_over:
             return MoveResult(ok=False, reason='game_over')
         if self._arbiter.has_active_motion():
@@ -50,7 +52,7 @@ class GameEngine:
         self._arbiter.start_motion(piece.id, src, dst)
         return MoveResult(ok=True, reason='ok')
 
-    def jump(self, pos):
+    def jump(self, pos: Position) -> None:
         """Remove a friendly piece from the board temporarily; it lands back after MS_PER_CELL."""
         if self._jump is not None:
             return
@@ -61,12 +63,12 @@ class GameEngine:
         self._airborne[piece.id] = piece
         self._jump = _Jump(piece_id=piece.id, landing=pos)
 
-    def wait(self, ms):
+    def wait(self, ms: int) -> None:
         for event in self._arbiter.advance_time(ms):
             self._apply_arrival(event)
         self._advance_jump(ms)
 
-    def _advance_jump(self, ms):
+    def _advance_jump(self, ms: int) -> None:
         if self._jump is None:
             return
         self._jump.elapsed_ms += ms
@@ -78,7 +80,6 @@ class GameEngine:
                 return
             target = self._board.get_piece(landing)
             if target and target.color != piece.color:
-                # jumper captures enemies only; friendly pieces are not displaced
                 target.state = 'captured'
                 self._board.remove_piece(landing)
                 if target.kind == 'K':
@@ -87,7 +88,7 @@ class GameEngine:
                 piece.cell = landing
                 self._board.add_piece(piece)
 
-    def _apply_arrival(self, event):
+    def _apply_arrival(self, event: ArrivalEvent) -> None:
         piece = self._board.get_piece(event.source)
         if piece is not None:
             self._board.remove_piece(event.source)
@@ -105,19 +106,19 @@ class GameEngine:
         self._board.add_piece(piece)
         self._try_promote(piece)
 
-    def _try_promote(self, piece):
+    def _try_promote(self, piece: Piece) -> None:
         if piece.kind != 'P':
             return
         promotion_row = 0 if piece.color == 'w' else self._board.height - 1
         if piece.cell.row == promotion_row:
             piece.kind = 'Q'
 
-    def snapshot(self, selected=None):
+    def snapshot(self, selected: Position | None = None) -> GameSnapshot:
         pieces = tuple(
             PieceSnapshot(p.id, p.color, p.kind, p.cell, p.state)
             for p in self._board._cells.values()
         )
-        motions = ()
+        motions: tuple[MotionSnapshot, ...] = ()
         m = self._arbiter.current_motion()
         if m:
             motions = (MotionSnapshot(m.piece_id, m.source, m.destination,
@@ -131,6 +132,6 @@ class GameEngine:
             height=self._board.height,
         )
 
-    def board_text(self):
+    def board_text(self) -> str:
         from ..io.board_printer import print_board
         return print_board(self._board)

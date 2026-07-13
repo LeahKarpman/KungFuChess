@@ -4,10 +4,10 @@ from kungfu_chess.model.position import Position
 
 
 class TestRealTimeArbiter(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.arbiter = RealTimeArbiter()
         self.src = Position(0, 0)
-        self.dst = Position(0, 1)  # מרחק 1 = 1000ms
+        self.dst = Position(0, 1)  # A one-cell move takes 1000 ms.
 
     def test_no_active_motion_initially(self):
         self.assertFalse(self.arbiter.has_active_motion())

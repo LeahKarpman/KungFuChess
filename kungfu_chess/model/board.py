@@ -1,9 +1,14 @@
 from __future__ import annotations
+from .piece import Piece
 from .position import Position
 
 
 class Board:
-    def __init__(self, width: int, height: int):
+    width: int
+    height: int
+    _cells: dict[Position, Piece]
+
+    def __init__(self, width: int, height: int) -> None:
         self.width = width
         self.height = height
         self._cells = {}
@@ -11,7 +16,7 @@ class Board:
     def in_bounds(self, pos: Position) -> bool:
         return 0 <= pos.row < self.height and 0 <= pos.col < self.width
 
-    def add_piece(self, piece) -> None:
+    def add_piece(self, piece: Piece) -> None:
         if piece.cell in self._cells:
             raise ValueError(f"Cell {piece.cell} is already occupied")
         self._cells[piece.cell] = piece
@@ -19,5 +24,5 @@ class Board:
     def remove_piece(self, pos: Position) -> None:
         self._cells.pop(pos, None)
 
-    def get_piece(self, pos: Position):
+    def get_piece(self, pos: Position) -> Piece | None:
         return self._cells.get(pos)
