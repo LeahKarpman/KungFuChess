@@ -47,3 +47,12 @@ class TestBoard(unittest.TestCase):
         b.add_piece(_make_piece(0, 0))
         b.remove_piece(Position(0, 0))
         self.assertIsNone(b.get_piece(Position(0, 0)))
+
+    def test_all_pieces_returns_current_occupants(self):
+        b = Board(2, 2)
+        first = _make_piece(0, 0)
+        second = _make_piece(1, 1, color='b')
+        b.add_piece(first)
+        b.add_piece(second)
+
+        self.assertEqual(b.all_pieces(), (first, second))

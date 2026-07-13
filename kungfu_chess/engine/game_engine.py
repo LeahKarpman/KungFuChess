@@ -116,7 +116,7 @@ class GameEngine:
     def snapshot(self, selected: Position | None = None) -> GameSnapshot:
         pieces = tuple(
             PieceSnapshot(p.id, p.color, p.kind, p.cell, p.state)
-            for p in self._board._cells.values()
+            for p in self._board.all_pieces()
         )
         motions: tuple[MotionSnapshot, ...] = ()
         m = self._arbiter.current_motion()

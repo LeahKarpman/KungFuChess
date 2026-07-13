@@ -5,6 +5,7 @@ from kungfu_chess.engine.rule_engine import RuleEngine, MoveValidation
 from kungfu_chess.engine.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.board import Board
+from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 
 
@@ -74,6 +75,19 @@ class TestGameEngine(unittest.TestCase):
         engine.wait(2000)
         result = engine.request_move(Position(0, 2), Position(0, 0))
         self.assertEqual(result.reason, 'game_over')
+
+    def test_snapshot_reads_pieces_through_board_public_api(self):
+        board = MagicMock(spec=Board)
+        board.width = 2
+        board.height = 1
+        piece = Piece('wR_0_0', 'w', 'R', Position(0, 0))
+        board.all_pieces.return_value = (piece,)
+        engine = GameEngine(board, RuleEngine(), RealTimeArbiter())
+
+        snapshot = engine.snapshot()
+
+        board.all_pieces.assert_called_once_with()
+        self.assertEqual(snapshot.pieces[0].id, piece.id)
 
 
 class TestLandingReservation(unittest.TestCase):

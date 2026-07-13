@@ -26,3 +26,7 @@ class Board:
 
     def get_piece(self, pos: Position) -> Piece | None:
         return self._cells.get(pos)
+
+    def all_pieces(self) -> tuple[Piece, ...]:
+        """Return the pieces currently occupying board cells."""
+        return tuple(self._cells.values())
