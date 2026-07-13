@@ -176,3 +176,8 @@ class TestJumpScheduling(unittest.TestCase):
         self.assertIsNone(board.get_piece(Position(0, 0)))
         self.assertIsNotNone(arrived_piece)
         self.assertEqual(arrived_piece.id, "wR_0_0")
+
+    def test_game_engine_does_not_store_airborne_pieces(self) -> None:
+        engine, _ = _engine([". wK ."])
+        engine.jump(Position(0, 1))
+        self.assertFalse(hasattr(engine, "_airborne"))

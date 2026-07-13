@@ -29,7 +29,6 @@ class GameEngine:
         self._rules = rule_engine or RuleEngine()
         self._arbiter = arbiter or RealTimeArbiter()
         self._game_over = False
-        self._airborne: dict[str, Piece] = {}
 
     @property
     def game_over(self) -> bool:
@@ -46,8 +45,7 @@ class GameEngine:
         jump = self._arbiter.active_jump_at(dst)
         if jump is not None:
             piece = self._board.get_piece(src)
-            jumper = self._airborne.get(jump.piece_id)
-            if jumper is not None and piece is not None and piece.color == jumper.color:
+            if piece is not None and piece.color == jump.piece_color:
                 return MoveResult(ok=False, reason="landing_reserved")
 
         validation = self._rules.validate_move(self._board, src, dst)
@@ -58,7 +56,7 @@ class GameEngine:
         if piece is None:
             return MoveResult(ok=False, reason="no_piece_at_source")
 
-        self._arbiter.start_motion(piece.id, src, dst)
+        self._arbiter.start_motion(piece, src, dst)
         return MoveResult(ok=True, reason="ok")
 
     def jump(self, pos: Position) -> None:
@@ -70,9 +68,8 @@ class GameEngine:
         if piece is None or self._arbiter.is_piece_busy(piece.id):
             return
 
-        self._arbiter.start_jump(piece.id, pos)
+        self._arbiter.start_jump(piece, pos)
         self._board.remove_piece(pos)
-        self._airborne[piece.id] = piece
 
     def wait(self, ms: int) -> None:
         """Advance simulated time and apply every completed action."""
@@ -83,11 +80,9 @@ class GameEngine:
                 self._apply_arrival(event)
 
     def _apply_jump_arrival(self, event: ArrivalEvent) -> None:
-        piece = self._airborne.pop(event.piece_id, None)
-        if piece is None:
-            return
-
+        piece = event.piece
         target = self._board.get_piece(event.destination)
+
         if target and target.color != piece.color:
             target.state = "captured"
             self._board.remove_piece(event.destination)
@@ -99,13 +94,14 @@ class GameEngine:
             self._board.add_piece(piece)
 
     def _apply_arrival(self, event: ArrivalEvent) -> None:
-        piece = self._board.get_piece(event.source)
-        if piece is not None:
-            self._board.remove_piece(event.source)
-        if piece is None:
+        piece = event.piece
+
+        if self._board.get_piece(event.source) is not piece:
             return
 
+        self._board.remove_piece(event.source)
         target = self._board.get_piece(event.destination)
+
         if target:
             target.state = "captured"
             self._board.remove_piece(event.destination)

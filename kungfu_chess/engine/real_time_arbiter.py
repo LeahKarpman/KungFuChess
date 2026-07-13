@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
+from ..model.piece import Piece
 from ..model.position import Position
 
 
@@ -22,7 +23,7 @@ def _completion_priority(action_kind: ActionKind) -> int:
 
 @dataclass
 class _ScheduledAction:
-    piece_id: str
+    piece: Piece
     action_kind: ActionKind
     source: Position
     destination: Position
@@ -36,6 +37,7 @@ class ActiveAction:
     """Provide an immutable view of a currently scheduled action."""
 
     piece_id: str
+    piece_color: str
     action_kind: ActionKind
     source: Position
     destination: Position
@@ -47,10 +49,15 @@ class ActiveAction:
 class ArrivalEvent:
     """Describe a timed action that has reached its destination."""
 
-    piece_id: str
+    piece: Piece
     source: Position
     destination: Position
     action_kind: ActionKind = "move"
+
+    @property
+    def piece_id(self) -> str:
+        """Return the stable identifier of the arriving piece."""
+        return self.piece.id
 
 
 class RealTimeArbiter:
@@ -70,23 +77,23 @@ class RealTimeArbiter:
 
     def start_motion(
         self,
-        piece_id: str,
+        piece: Piece,
         source: Position,
         destination: Position,
     ) -> None:
         """Schedule a regular move for a currently idle piece."""
         self._start_action(
-            piece_id=piece_id,
+            piece=piece,
             action_kind="move",
             source=source,
             destination=destination,
             duration_ms=_travel_time(source, destination),
         )
 
-    def start_jump(self, piece_id: str, landing: Position) -> None:
+    def start_jump(self, piece: Piece, landing: Position) -> None:
         """Schedule a jump that lands on its source cell after one second."""
         self._start_action(
-            piece_id=piece_id,
+            piece=piece,
             action_kind="jump",
             source=landing,
             destination=landing,
@@ -113,7 +120,7 @@ class RealTimeArbiter:
                     _completion_priority(action.action_kind),
                     action.sequence,
                     ArrivalEvent(
-                        piece_id=action.piece_id,
+                        piece=action.piece,
                         source=action.source,
                         destination=action.destination,
                         action_kind=action.action_kind,
@@ -142,17 +149,17 @@ class RealTimeArbiter:
 
     def _start_action(
         self,
-        piece_id: str,
+        piece: Piece,
         action_kind: ActionKind,
         source: Position,
         destination: Position,
         duration_ms: int,
     ) -> None:
-        if self.is_piece_busy(piece_id):
+        if self.is_piece_busy(piece.id):
             raise ValueError("piece_busy")
 
-        self._actions[piece_id] = _ScheduledAction(
-            piece_id=piece_id,
+        self._actions[piece.id] = _ScheduledAction(
+            piece=piece,
             action_kind=action_kind,
             source=source,
             destination=destination,
@@ -164,7 +171,8 @@ class RealTimeArbiter:
     @staticmethod
     def _to_active_action(action: _ScheduledAction) -> ActiveAction:
         return ActiveAction(
-            piece_id=action.piece_id,
+            piece_id=action.piece.id,
+            piece_color=action.piece.color,
             action_kind=action.action_kind,
             source=action.source,
             destination=action.destination,
