@@ -99,3 +99,47 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         with self.assertRaises(AttributeError):
             setattr(motions[0], "elapsed_ms", 500)
+
+    def test_jump_is_scheduled_without_becoming_active_motion(self) -> None:
+        self.arbiter.start_jump("wK_1_1", Position(1, 1))
+
+        self.assertTrue(self.arbiter.is_piece_busy("wK_1_1"))
+        self.assertFalse(self.arbiter.has_active_motion())
+        self.assertEqual(self.arbiter.active_motions(), ())
+
+    def test_active_jump_can_be_found_by_landing_cell(self) -> None:
+        landing = Position(1, 1)
+        self.arbiter.start_jump("wK_1_1", landing)
+
+        jump = self.arbiter.active_jump_at(landing)
+
+        self.assertIsNotNone(jump)
+        self.assertEqual(jump.piece_id, "wK_1_1")
+
+    def test_jump_completes_after_one_cell_duration(self) -> None:
+        landing = Position(1, 1)
+        self.arbiter.start_jump("wK_1_1", landing)
+
+        self.assertEqual(self.arbiter.advance_time(999), [])
+        events = self.arbiter.advance_time(1)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].action_kind, "jump")
+        self.assertEqual(events[0].destination, landing)
+        self.assertFalse(self.arbiter.is_piece_busy("wK_1_1"))
+
+    def test_move_completion_precedes_jump_at_same_time(self) -> None:
+        landing = Position(1, 1)
+        self.arbiter.start_jump("wK_1_1", landing)
+        self.arbiter.start_motion(
+            "bR_1_2",
+            Position(1, 2),
+            landing,
+        )
+
+        events = self.arbiter.advance_time(1000)
+
+        self.assertEqual(
+            [event.action_kind for event in events],
+            ["move", "jump"],
+        )

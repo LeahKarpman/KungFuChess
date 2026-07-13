@@ -1,19 +1,29 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Literal
 from ..model.position import Position
 
+
 MS_PER_CELL = 1000
+ActionKind = Literal["move", "jump"]
 
 
 def _travel_time(source: Position, destination: Position) -> int:
+    """Calculate movement duration from the longest board-axis distance."""
     dr = abs(destination.row - source.row)
     dc = abs(destination.col - source.col)
     return max(dr, dc) * MS_PER_CELL
 
 
+def _completion_priority(action_kind: ActionKind) -> int:
+    """Resolve a move before a jump when both complete simultaneously."""
+    return 0 if action_kind == "move" else 1
+
+
 @dataclass
-class _Motion:
+class _ScheduledAction:
     piece_id: str
+    action_kind: ActionKind
     source: Position
     destination: Position
     duration_ms: int
@@ -22,8 +32,11 @@ class _Motion:
 
 
 @dataclass(frozen=True)
-class ActiveMotion:
+class ActiveAction:
+    """Provide an immutable view of a currently scheduled action."""
+
     piece_id: str
+    action_kind: ActionKind
     source: Position
     destination: Position
     duration_ms: int
@@ -32,21 +45,28 @@ class ActiveMotion:
 
 @dataclass(frozen=True)
 class ArrivalEvent:
+    """Describe a timed action that has reached its destination."""
+
     piece_id: str
     source: Position
     destination: Position
+    action_kind: ActionKind = "move"
 
 
 class RealTimeArbiter:
+    """Schedule timed piece actions and emit deterministic arrival events."""
+
     def __init__(self) -> None:
-        self._motions: dict[str, _Motion] = {}
+        self._actions: dict[str, _ScheduledAction] = {}
         self._next_sequence = 0
 
     def has_active_motion(self) -> bool:
-        return bool(self._motions)
+        """Return whether at least one regular move is active."""
+        return any(action.action_kind == "move" for action in self._actions.values())
 
     def is_piece_busy(self, piece_id: str) -> bool:
-        return piece_id in self._motions
+        """Return whether the piece already has any scheduled action."""
+        return piece_id in self._actions
 
     def start_motion(
         self,
@@ -54,53 +74,100 @@ class RealTimeArbiter:
         source: Position,
         destination: Position,
     ) -> None:
-        if self.is_piece_busy(piece_id):
-            raise ValueError('piece_busy')
-
-        self._motions[piece_id] = _Motion(
+        """Schedule a regular move for a currently idle piece."""
+        self._start_action(
             piece_id=piece_id,
+            action_kind="move",
             source=source,
             destination=destination,
             duration_ms=_travel_time(source, destination),
+        )
+
+    def start_jump(self, piece_id: str, landing: Position) -> None:
+        """Schedule a jump that lands on its source cell after one second."""
+        self._start_action(
+            piece_id=piece_id,
+            action_kind="jump",
+            source=landing,
+            destination=landing,
+            duration_ms=MS_PER_CELL,
+        )
+
+    def advance_time(self, ms: int) -> list[ArrivalEvent]:
+        """Advance every action and return events in resolution order."""
+        completed: list[tuple[int, int, int, ArrivalEvent]] = []
+
+        for piece_id, action in tuple(self._actions.items()):
+            remaining_ms = max(
+                action.duration_ms - action.elapsed_ms,
+                0,
+            )
+            action.elapsed_ms += ms
+
+            if action.elapsed_ms < action.duration_ms:
+                continue
+
+            completed.append(
+                (
+                    remaining_ms,
+                    _completion_priority(action.action_kind),
+                    action.sequence,
+                    ArrivalEvent(
+                        piece_id=action.piece_id,
+                        source=action.source,
+                        destination=action.destination,
+                        action_kind=action.action_kind,
+                    ),
+                )
+            )
+            del self._actions[piece_id]
+
+        completed.sort(key=lambda item: item[:3])
+        return [event for _, _, _, event in completed]
+
+    def active_motions(self) -> tuple[ActiveAction, ...]:
+        """Return immutable views of active regular moves."""
+        return tuple(
+            self._to_active_action(action)
+            for action in self._actions.values()
+            if action.action_kind == "move"
+        )
+
+    def active_jump_at(self, landing: Position) -> ActiveAction | None:
+        """Return the jump scheduled to land on a cell, if one exists."""
+        for action in self._actions.values():
+            if action.action_kind == "jump" and action.destination == landing:
+                return self._to_active_action(action)
+        return None
+
+    def _start_action(
+        self,
+        piece_id: str,
+        action_kind: ActionKind,
+        source: Position,
+        destination: Position,
+        duration_ms: int,
+    ) -> None:
+        if self.is_piece_busy(piece_id):
+            raise ValueError("piece_busy")
+
+        self._actions[piece_id] = _ScheduledAction(
+            piece_id=piece_id,
+            action_kind=action_kind,
+            source=source,
+            destination=destination,
+            duration_ms=duration_ms,
             sequence=self._next_sequence,
         )
         self._next_sequence += 1
 
-    def advance_time(self, ms: int) -> list[ArrivalEvent]:
-        completed: list[tuple[int, int, ArrivalEvent]] = []
-
-        for piece_id, motion in tuple(self._motions.items()):
-            remaining_ms = max(
-                motion.duration_ms - motion.elapsed_ms,
-                0,
-            )
-            motion.elapsed_ms += ms
-
-            if motion.elapsed_ms < motion.duration_ms:
-                continue
-
-            completed.append((
-                remaining_ms,
-                motion.sequence,
-                ArrivalEvent(
-                    piece_id=motion.piece_id,
-                    source=motion.source,
-                    destination=motion.destination,
-                ),
-            ))
-            del self._motions[piece_id]
-
-        completed.sort(key=lambda item: (item[0], item[1]))
-        return [event for _, _, event in completed]
-
-    def active_motions(self) -> tuple[ActiveMotion, ...]:
-        return tuple(
-            ActiveMotion(
-                piece_id=motion.piece_id,
-                source=motion.source,
-                destination=motion.destination,
-                duration_ms=motion.duration_ms,
-                elapsed_ms=motion.elapsed_ms,
-            )
-            for motion in self._motions.values()
+    @staticmethod
+    def _to_active_action(action: _ScheduledAction) -> ActiveAction:
+        return ActiveAction(
+            piece_id=action.piece_id,
+            action_kind=action.action_kind,
+            source=action.source,
+            destination=action.destination,
+            duration_ms=action.duration_ms,
+            elapsed_ms=action.elapsed_ms,
         )

@@ -3,26 +3,22 @@ from dataclasses import dataclass
 from ..model.board import Board
 from ..model.piece import Piece
 from ..model.position import Position
+from .game_snapshot import GameSnapshot, MotionSnapshot, PieceSnapshot
+from .real_time_arbiter import ArrivalEvent, RealTimeArbiter
 from .rule_engine import RuleEngine
-from .real_time_arbiter import RealTimeArbiter, ArrivalEvent, MS_PER_CELL
-from .game_snapshot import GameSnapshot, PieceSnapshot, MotionSnapshot
 
 
 @dataclass(frozen=True)
 class MoveResult:
+    """Report whether a move request was accepted and why."""
+
     ok: bool
     reason: str
 
 
-@dataclass
-class _Jump:
-    piece_id: str
-    landing: Position
-    elapsed_ms: int = 0
-    duration_ms: int = MS_PER_CELL
-
-
 class GameEngine:
+    """Coordinate rules, timed actions, arrivals, and game state."""
+
     def __init__(
         self,
         board: Board,
@@ -34,79 +30,88 @@ class GameEngine:
         self._arbiter = arbiter or RealTimeArbiter()
         self._game_over = False
         self._airborne: dict[str, Piece] = {}
-        self._jump: _Jump | None = None
 
     @property
     def game_over(self) -> bool:
+        """Return whether a king has been captured."""
         return self._game_over
 
     def request_move(self, src: Position, dst: Position) -> MoveResult:
+        """Validate and schedule a move without mutating settled board cells."""
         if self._game_over:
             return MoveResult(ok=False, reason="game_over")
         if self._arbiter.has_active_motion():
             return MoveResult(ok=False, reason="motion_in_progress")
-        if self._jump is not None and dst == self._jump.landing:
+
+        jump = self._arbiter.active_jump_at(dst)
+        if jump is not None:
             piece = self._board.get_piece(src)
-            jumper = self._airborne.get(self._jump.piece_id)
+            jumper = self._airborne.get(jump.piece_id)
             if jumper is not None and piece is not None and piece.color == jumper.color:
                 return MoveResult(ok=False, reason="landing_reserved")
+
         validation = self._rules.validate_move(self._board, src, dst)
         if not validation.ok:
             return MoveResult(ok=False, reason=validation.reason)
+
         piece = self._board.get_piece(src)
+        if piece is None:
+            return MoveResult(ok=False, reason="no_piece_at_source")
+
         self._arbiter.start_motion(piece.id, src, dst)
         return MoveResult(ok=True, reason="ok")
 
     def jump(self, pos: Position) -> None:
-        """Remove a friendly piece from the board temporarily; it lands back after MS_PER_CELL."""
-        if self._jump is not None:
+        """Start a timed jump for an idle piece on the requested cell."""
+        if self._game_over:
             return
+
         piece = self._board.get_piece(pos)
-        if piece is None or piece.color != "w":
+        if piece is None or self._arbiter.is_piece_busy(piece.id):
             return
+
+        self._arbiter.start_jump(piece.id, pos)
         self._board.remove_piece(pos)
         self._airborne[piece.id] = piece
-        self._jump = _Jump(piece_id=piece.id, landing=pos)
 
     def wait(self, ms: int) -> None:
+        """Advance simulated time and apply every completed action."""
         for event in self._arbiter.advance_time(ms):
-            self._apply_arrival(event)
-        self._advance_jump(ms)
+            if event.action_kind == "jump":
+                self._apply_jump_arrival(event)
+            else:
+                self._apply_arrival(event)
 
-    def _advance_jump(self, ms: int) -> None:
-        if self._jump is None:
+    def _apply_jump_arrival(self, event: ArrivalEvent) -> None:
+        piece = self._airborne.pop(event.piece_id, None)
+        if piece is None:
             return
-        self._jump.elapsed_ms += ms
-        if self._jump.elapsed_ms >= self._jump.duration_ms:
-            piece = self._airborne.pop(self._jump.piece_id, None)
-            landing = self._jump.landing
-            self._jump = None
-            if piece is None:
-                return
-            target = self._board.get_piece(landing)
-            if target and target.color != piece.color:
-                target.state = "captured"
-                self._board.remove_piece(landing)
-                if target.kind == "K":
-                    self._game_over = True
-            if not self._board.get_piece(landing):
-                piece.cell = landing
-                self._board.add_piece(piece)
+
+        target = self._board.get_piece(event.destination)
+        if target and target.color != piece.color:
+            target.state = "captured"
+            self._board.remove_piece(event.destination)
+            if target.kind == "K":
+                self._game_over = True
+
+        if not self._board.get_piece(event.destination):
+            piece.cell = event.destination
+            self._board.add_piece(piece)
 
     def _apply_arrival(self, event: ArrivalEvent) -> None:
         piece = self._board.get_piece(event.source)
         if piece is not None:
             self._board.remove_piece(event.source)
-        else:
-            piece = self._airborne.pop(event.piece_id, None)
         if piece is None:
             return
+
         target = self._board.get_piece(event.destination)
         if target:
             target.state = "captured"
             self._board.remove_piece(event.destination)
             if target.kind == "K":
                 self._game_over = True
+
         piece.cell = event.destination
         self._board.add_piece(piece)
         self._try_promote(piece)
@@ -114,11 +119,13 @@ class GameEngine:
     def _try_promote(self, piece: Piece) -> None:
         if piece.kind != "P":
             return
+
         promotion_row = 0 if piece.color == "w" else self._board.height - 1
         if piece.cell.row == promotion_row:
             piece.kind = "Q"
 
     def snapshot(self, selected: Position | None = None) -> GameSnapshot:
+        """Return an immutable representation of the current game state."""
         pieces = tuple(
             PieceSnapshot(p.id, p.color, p.kind, p.cell, p.state)
             for p in self._board.all_pieces()
@@ -143,5 +150,7 @@ class GameEngine:
         )
 
     def board_text(self) -> str:
+        """Render the settled logical board as canonical text."""
         from ..io.board_printer import print_board
+
         return print_board(self._board)
