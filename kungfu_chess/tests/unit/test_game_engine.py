@@ -179,9 +179,41 @@ class TestGameEngine(unittest.TestCase):
             "moving",
         )
         self.assertEqual(
+            moving_snapshot.pieces[0].cell,
+            Position(0, 0),
+        )
+        self.assertEqual(len(moving_snapshot.motions), 1)
+        self.assertEqual(
             arrived_snapshot.pieces[0].state,
             "idle",
         )
+        self.assertEqual(
+            arrived_snapshot.pieces[0].cell,
+            Position(0, 2),
+        )
+        self.assertEqual(arrived_snapshot.motions, ())
+
+    def test_snapshot_contains_each_piece_once_during_move_and_jump(
+        self,
+    ) -> None:
+        """Avoid duplicate piece views when different actions are active."""
+        engine, _ = _engine(
+            [
+                "wR . .",
+                ". wK .",
+                "bR . .",
+            ]
+        )
+        engine.request_move(Position(0, 0), Position(0, 2))
+        engine.jump(Position(1, 1))
+
+        snapshot = engine.snapshot()
+        piece_ids = [piece.id for piece in snapshot.pieces]
+        motion_ids = {motion.piece_id for motion in snapshot.motions}
+
+        self.assertEqual(len(piece_ids), 3)
+        self.assertEqual(len(piece_ids), len(set(piece_ids)))
+        self.assertEqual(motion_ids, {"wR_0_0", "wK_1_1"})
 
     def test_snapshot_and_nested_piece_views_are_immutable(self) -> None:
         engine, _ = _engine(["wR . ."])
