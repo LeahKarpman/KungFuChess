@@ -75,10 +75,6 @@ class RealTimeArbiter:
         self._actions: dict[str, _ScheduledAction] = {}
         self._next_sequence = 0
 
-    def has_active_motion(self) -> bool:
-        """Return whether at least one regular move is active."""
-        return any(action.action_kind == "move" for action in self._actions.values())
-
     def is_piece_busy(self, piece_id: str) -> bool:
         """Return whether the piece already has any scheduled action."""
         return piece_id in self._actions
@@ -150,12 +146,6 @@ class RealTimeArbiter:
 
         completed.sort(key=lambda item: item[:3])
         return [event for _, _, _, event in completed]
-
-    def active_motions(self) -> tuple[ActiveAction, ...]:
-        """Return immutable views of active regular moves."""
-        return tuple(
-            action for action in self.active_actions() if action.action_kind == "move"
-        )
 
     def active_actions(self) -> tuple[ActiveAction, ...]:
         """Return immutable views of every currently scheduled action."""

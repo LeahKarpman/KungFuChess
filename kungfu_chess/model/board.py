@@ -24,6 +24,8 @@ class Board:
             raise ValueError("piece_out_of_bounds")
         if piece.cell in self._cells:
             raise ValueError(f"Cell {piece.cell} is already occupied")
+        if any(existing.id == piece.id for existing in self._cells.values()):
+            raise ValueError("duplicate_piece_id")
         self._cells[piece.cell] = piece
 
     def remove_piece(self, pos: Position) -> None:

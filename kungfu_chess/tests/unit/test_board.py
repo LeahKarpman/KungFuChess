@@ -61,6 +61,16 @@ class TestBoard(unittest.TestCase):
         with self.assertRaises(ValueError):
             b.add_piece(_make_piece(0, 0, color="b"))
 
+    def test_duplicate_piece_id_raises(self) -> None:
+        """Reject two board occupants that share one stable identity."""
+        board = Board(2, 2)
+        first = Piece("shared_id", "w", "K", Position(0, 0))
+        second = Piece("shared_id", "b", "K", Position(1, 1))
+        board.add_piece(first)
+
+        with self.assertRaisesRegex(ValueError, "^duplicate_piece_id$"):
+            board.add_piece(second)
+
     def test_remove_piece(self):
         b = Board(4, 4)
         b.add_piece(_make_piece(0, 0))

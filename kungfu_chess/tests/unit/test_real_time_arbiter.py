@@ -14,12 +14,12 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.dst = Position(0, 1)
         self.piece = Piece("wR_0_0", "w", "R", self.src)
 
-    def test_no_active_motion_initially(self) -> None:
-        self.assertFalse(self.arbiter.has_active_motion())
+    def test_no_active_actions_initially(self) -> None:
+        self.assertEqual(self.arbiter.active_actions(), ())
 
-    def test_start_motion_activates(self) -> None:
+    def test_start_motion_marks_piece_busy(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
-        self.assertTrue(self.arbiter.has_active_motion())
+        self.assertTrue(self.arbiter.is_piece_busy(self.piece.id))
 
     def test_before_arrival_no_event(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
@@ -27,7 +27,7 @@ class TestRealTimeArbiter(unittest.TestCase):
         events = self.arbiter.advance_time(999)
 
         self.assertEqual(events, [])
-        self.assertTrue(self.arbiter.has_active_motion())
+        self.assertTrue(self.arbiter.is_piece_busy(self.piece.id))
 
     def test_arrival_at_1000ms(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
@@ -36,7 +36,7 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].destination, self.dst)
-        self.assertFalse(self.arbiter.has_active_motion())
+        self.assertFalse(self.arbiter.is_piece_busy(self.piece.id))
 
     def test_partial_then_remaining_wait(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
@@ -147,20 +147,20 @@ class TestRealTimeArbiter(unittest.TestCase):
             [event.piece_id for event in events],
             ["wR_0_0", "bR_2_0"],
         )
-        self.assertFalse(self.arbiter.has_active_motion())
+        self.assertEqual(self.arbiter.active_actions(), ())
 
-    def test_active_motions_are_immutable_copies(self) -> None:
+    def test_active_actions_are_immutable_copies(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
 
-        motions = self.arbiter.active_motions()
+        actions = self.arbiter.active_actions()
 
-        self.assertEqual(len(motions), 1)
-        self.assertEqual(motions[0].piece_id, "wR_0_0")
-        self.assertEqual(motions[0].piece_color, "w")
-        self.assertFalse(hasattr(motions[0], "piece"))
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0].piece_id, "wR_0_0")
+        self.assertEqual(actions[0].piece_color, "w")
+        self.assertFalse(hasattr(actions[0], "piece"))
 
         with self.assertRaises(AttributeError):
-            setattr(motions[0], "elapsed_ms", 500)
+            setattr(actions[0], "elapsed_ms", 500)
 
     def test_active_actions_include_moves_and_jumps(self) -> None:
         landing = Position(1, 1)
@@ -179,16 +179,6 @@ class TestRealTimeArbiter(unittest.TestCase):
             {"R", "K"},
         )
         self.assertTrue(all(not hasattr(action, "piece") for action in actions))
-
-    def test_jump_is_scheduled_without_becoming_active_motion(self) -> None:
-        landing = Position(1, 1)
-        jumper = Piece("wK_1_1", "w", "K", landing)
-
-        self.arbiter.start_jump(jumper, landing)
-
-        self.assertTrue(self.arbiter.is_piece_busy("wK_1_1"))
-        self.assertFalse(self.arbiter.has_active_motion())
-        self.assertEqual(self.arbiter.active_motions(), ())
 
     def test_active_jump_can_be_found_by_landing_cell(self) -> None:
         landing = Position(1, 1)
