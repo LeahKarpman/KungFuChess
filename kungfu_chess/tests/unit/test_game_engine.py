@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import MagicMock
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.engine.real_time_arbiter import RealTimeArbiter
-from kungfu_chess.engine.rule_engine import RuleEngine
+from kungfu_chess.engine.rule_engine import MoveValidation, RuleEngine
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.board import Board
 from kungfu_chess.model.piece import Piece
@@ -12,6 +12,31 @@ from kungfu_chess.model.position import Position
 def _engine(lines: list[str]) -> tuple[GameEngine, Board]:
     board = parse_board(lines)
     return GameEngine(board, RuleEngine(), RealTimeArbiter()), board
+
+
+class _FalseyRuleEngine(RuleEngine):
+    """Expose whether a falsey injected validation service is actually used."""
+
+    def __bool__(self) -> bool:
+        return False
+
+    def validate_move(
+        self,
+        board: Board,
+        src: Position,
+        dst: Position,
+    ) -> MoveValidation:
+        return MoveValidation(ok=False, reason="injected_rule_engine")
+
+
+class _FalseyArbiter(RealTimeArbiter):
+    """Expose whether a falsey injected scheduling service is actually used."""
+
+    def __bool__(self) -> bool:
+        return False
+
+    def is_piece_busy(self, piece_id: str) -> bool:
+        return True
 
 
 class TestGameEngine(unittest.TestCase):
@@ -27,6 +52,40 @@ class TestGameEngine(unittest.TestCase):
 
         self.assertTrue(result.ok)
         self.assertEqual(result.reason, "ok")
+
+    def test_uses_falsey_injected_rule_engine(self) -> None:
+        board = parse_board(["wR ."])
+        engine = GameEngine(
+            board,
+            rule_engine=_FalseyRuleEngine(),
+            arbiter=RealTimeArbiter(),
+        )
+
+        result = engine.request_move(Position(0, 0), Position(0, 1))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "injected_rule_engine")
+
+    def test_uses_falsey_injected_arbiter(self) -> None:
+        board = parse_board(["wR ."])
+        engine = GameEngine(
+            board,
+            rule_engine=RuleEngine(),
+            arbiter=_FalseyArbiter(),
+        )
+
+        result = engine.request_move(Position(0, 0), Position(0, 1))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "piece_busy")
+
+    def test_missing_source_returns_rule_engine_reason(self) -> None:
+        engine, _ = _engine([". ."])
+
+        result = engine.request_move(Position(0, 0), Position(0, 1))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "no_piece_at_source")
 
     def test_illegal_move_returns_reason(self) -> None:
         engine, _ = _engine([". . .", ". wR .", ". . ."])

@@ -28,8 +28,8 @@ class GameEngine:
         arbiter: RealTimeArbiter | None = None,
     ) -> None:
         self._board = board
-        self._rules = rule_engine or RuleEngine()
-        self._arbiter = arbiter or RealTimeArbiter()
+        self._rules = rule_engine if rule_engine is not None else RuleEngine()
+        self._arbiter = arbiter if arbiter is not None else RealTimeArbiter()
         self._game_over = False
 
     @property
@@ -55,9 +55,7 @@ class GameEngine:
         if not validation.ok:
             return MoveResult(ok=False, reason=validation.reason)
 
-        if piece is None:
-            return MoveResult(ok=False, reason="no_piece_at_source")
-
+        assert piece is not None
         self._arbiter.start_motion(piece, src, dst)
         return MoveResult(ok=True, reason="ok")
 
@@ -127,7 +125,7 @@ class GameEngine:
         if piece.cell.row == promotion_row:
             piece.kind = "Q"
 
-    def snapshot(self, selected: Position | None = None) -> GameSnapshot:
+    def snapshot(self) -> GameSnapshot:
         """Return an immutable representation of the current game state."""
         active_actions = self._arbiter.active_actions()
         pieces = [
@@ -161,7 +159,6 @@ class GameEngine:
         return GameSnapshot(
             pieces=tuple(pieces),
             motions=motions,
-            selected=selected,
             game_over=self._game_over,
             width=self._board.width,
             height=self._board.height,

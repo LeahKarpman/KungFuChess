@@ -37,7 +37,6 @@ class GameSnapshot:
 
     pieces: tuple[PieceSnapshot, ...]
     motions: tuple[MotionSnapshot, ...]
-    selected: Position | None
     game_over: bool
     width: int
     height: int

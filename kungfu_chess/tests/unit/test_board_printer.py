@@ -29,7 +29,6 @@ class TestBoardPrinter(unittest.TestCase):
                 ),
             ),
             motions=(),
-            selected=None,
             game_over=False,
             width=3,
             height=2,
