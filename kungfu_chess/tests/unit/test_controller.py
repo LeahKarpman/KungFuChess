@@ -1,15 +1,16 @@
 import unittest
 from unittest.mock import MagicMock
-from kungfu_chess.controller.controller import Controller, ControllerResult
+from kungfu_chess.controller.controller import Controller
+from kungfu_chess.engine.game_engine import GameEngine
+from kungfu_chess.engine.real_time_arbiter import RealTimeArbiter
+from kungfu_chess.engine.rule_engine import RuleEngine
 from kungfu_chess.io.board_mapper import BoardMapper
 from kungfu_chess.io.board_parser import parse_board
-from kungfu_chess.engine.game_engine import GameEngine
-from kungfu_chess.engine.rule_engine import RuleEngine
-from kungfu_chess.engine.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.model.position import Position
 
 
 def _setup(lines: list[str]) -> tuple[Controller, GameEngine]:
+    """Build a controller and its real engine for a small board."""
     board = parse_board(lines)
     engine = GameEngine(board, RuleEngine(), RealTimeArbiter())
     mapper = BoardMapper(board.width, board.height)
@@ -18,46 +19,80 @@ def _setup(lines: list[str]) -> tuple[Controller, GameEngine]:
 
 
 class TestController(unittest.TestCase):
-    def test_first_click_on_piece_selects(self):
-        controller, _ = _setup(['wR . .'])
+    """Verify click interpretation and selection state."""
+
+    def test_first_click_on_piece_selects(self) -> None:
+        controller, _ = _setup(["wR . ."])
         result = controller.click(50, 50)
-        self.assertEqual(result.action, 'selected')
+
+        self.assertEqual(result.action, "selected")
         self.assertEqual(controller.selected, Position(0, 0))
 
-    def test_first_click_on_empty_ignored(self):
-        controller, _ = _setup(['wR . .'])
+    def test_first_click_on_empty_ignored(self) -> None:
+        controller, _ = _setup(["wR . ."])
         result = controller.click(150, 50)
-        self.assertEqual(result.action, 'ignored')
+
+        self.assertEqual(result.action, "ignored")
         self.assertIsNone(controller.selected)
 
-    def test_outside_click_no_selection_ignored(self):
-        controller, _ = _setup(['wR . .'])
+    def test_outside_click_no_selection_ignored(self) -> None:
+        controller, _ = _setup(["wR . ."])
         result = controller.click(9999, 9999)
-        self.assertEqual(result.action, 'ignored')
 
-    def test_outside_click_with_selection_cancels(self):
-        controller, _ = _setup(['wR . .'])
+        self.assertEqual(result.action, "ignored")
+
+    def test_outside_click_with_selection_cancels(self) -> None:
+        controller, _ = _setup(["wR . ."])
         controller.click(50, 50)
+
         result = controller.click(9999, 9999)
-        self.assertEqual(result.action, 'cancelled')
+
+        self.assertEqual(result.action, "cancelled")
         self.assertIsNone(controller.selected)
 
-    def test_second_inboard_click_sends_move_and_clears_selection(self):
+    def test_second_inboard_click_sends_move_and_clears_selection(self) -> None:
         mock_engine = MagicMock(spec=GameEngine)
         mock_engine.snapshot.return_value = MagicMock(
             pieces=[MagicMock(cell=Position(0, 0))]
         )
         mapper = BoardMapper(3, 1)
         controller = Controller(mapper, mock_engine)
-        controller.click(50, 50)  # Select the piece.
-        result = controller.click(150, 50)  # Request the destination.
-        self.assertEqual(result.action, 'move_requested')
-        mock_engine.request_move.assert_called_once_with(Position(0, 0), Position(0, 1))
+        controller.click(50, 50)
+
+        result = controller.click(150, 50)
+
+        self.assertEqual(result.action, "move_requested")
+        mock_engine.request_move.assert_called_once_with(
+            Position(0, 0),
+            Position(0, 1),
+        )
         self.assertIsNone(controller.selected)
 
-    def test_selection_cleared_after_second_click_regardless_of_validity(self):
-        controller, _ = _setup(['wR . .'])
+    def test_selection_cleared_after_second_click_regardless_of_validity(
+        self,
+    ) -> None:
+        controller, _ = _setup(["wR . ."])
         controller.click(50, 50)
-        # Selection is cleared whether the requested move is valid or not.
+
         controller.click(150, 50)
+
         self.assertIsNone(controller.selected)
+
+    def test_moving_piece_cannot_be_selected(self) -> None:
+        controller, engine = _setup(["wR . ."])
+        engine.request_move(Position(0, 0), Position(0, 2))
+
+        result = controller.click(50, 50)
+
+        self.assertEqual(result.action, "ignored")
+        self.assertIsNone(controller.selected)
+
+    def test_clicking_moving_piece_preserves_existing_selection(self) -> None:
+        controller, engine = _setup(["wR . wK"])
+        engine.request_move(Position(0, 0), Position(0, 1))
+        controller.click(250, 50)
+
+        result = controller.click(50, 50)
+
+        self.assertEqual(result.action, "ignored")
+        self.assertEqual(controller.selected, Position(0, 2))
