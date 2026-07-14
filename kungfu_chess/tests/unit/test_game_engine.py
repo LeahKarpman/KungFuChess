@@ -427,6 +427,27 @@ class TestLandingReservation(unittest.TestCase):
 class TestJumpScheduling(unittest.TestCase):
     """Verify that jump timing is delegated to the real-time arbiter."""
 
+    def test_jump_on_empty_cell_leaves_game_unchanged(self) -> None:
+        """Ignore a valid board position that does not contain a piece."""
+        engine, _ = _engine([". ."])
+        before = engine.snapshot()
+
+        engine.jump(Position(0, 0))
+
+        self.assertEqual(engine.snapshot(), before)
+
+    def test_jump_after_game_over_leaves_game_unchanged(self) -> None:
+        """Reject new jump actions after a king has been captured."""
+        engine, _ = _engine(["wR . bK", ". . wP"])
+        engine.request_move(Position(0, 0), Position(0, 2))
+        engine.wait(2000)
+        before = engine.snapshot()
+
+        engine.jump(Position(1, 2))
+
+        self.assertTrue(engine.game_over)
+        self.assertEqual(engine.snapshot(), before)
+
     def test_snapshot_includes_airborne_piece_and_jump_action(self) -> None:
         engine, _ = _engine([". wK ."])
         landing = Position(0, 1)

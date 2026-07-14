@@ -108,6 +108,7 @@ class TestController(unittest.TestCase):
         self.assertEqual(result.action, "jump_requested")
         self.assertEqual(result.position, Position(2, 1))
         mock_engine.jump.assert_called_once_with(Position(2, 1))
+        mock_engine.snapshot.assert_not_called()
 
     def test_jump_outside_board_is_ignored(self) -> None:
         """Reject an out-of-board jump before it reaches the game engine."""
@@ -118,3 +119,4 @@ class TestController(unittest.TestCase):
 
         self.assertEqual(result.action, "ignored")
         mock_engine.jump.assert_not_called()
+    
