@@ -58,6 +58,19 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         self.assertEqual(len(events), 1)
 
+    def test_knight_move_takes_3000ms(self) -> None:
+        """Measure a knight's L-shaped route as three cell transitions."""
+        source = Position(0, 0)
+        destination = Position(2, 1)
+        knight = Piece("wN_0_0", "w", "N", source)
+        self.arbiter.start_motion(knight, source, destination)
+
+        self.assertEqual(self.arbiter.advance_time(2999), [])
+        events = self.arbiter.advance_time(1)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].piece_id, knight.id)
+
     def test_multiple_waits_accumulate(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
 

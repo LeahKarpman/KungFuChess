@@ -11,11 +11,16 @@ MS_PER_CELL = 1000
 ActionKind = Literal["move", "jump"]
 
 
-def _travel_time(source: Position, destination: Position) -> int:
-    """Calculate movement duration from the longest board-axis distance."""
+def _travel_time(
+    piece_kind: str,
+    source: Position,
+    destination: Position,
+) -> int:
+    """Calculate movement duration from the piece's board-cell route."""
     dr = abs(destination.row - source.row)
     dc = abs(destination.col - source.col)
-    return max(dr, dc) * MS_PER_CELL
+    distance = dr + dc if piece_kind == "N" else max(dr, dc)
+    return distance * MS_PER_CELL
 
 
 def _completion_priority(action_kind: ActionKind) -> int:
@@ -94,7 +99,7 @@ class RealTimeArbiter:
             action_kind="move",
             source=source,
             destination=destination,
-            duration_ms=_travel_time(source, destination),
+            duration_ms=_travel_time(piece.kind, source, destination),
         )
 
     def start_jump(self, piece: Piece, landing: Position) -> None:
