@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 from io import StringIO
 from unittest.mock import patch
@@ -128,6 +130,17 @@ class TestTextScripts(unittest.TestCase):
         out = self._run(lines)
 
         self.assertEqual(out, "wK .\n")
+
+    def test_invalid_board_reports_canonical_error(self) -> None:
+        """Preserve parser errors through the complete text adapter path."""
+        cases = [
+            (["Board:", "wK xZ", ". .", "Commands:"], "UNKNOWN_TOKEN"),
+            (["Board:", "wK . .", ". bK", "Commands:"], "ROW_WIDTH_MISMATCH"),
+        ]
+
+        for lines, reason in cases:
+            with self.subTest(reason=reason):
+                self.assertEqual(self._run(lines), f"ERROR {reason}\n")
 
     # ── Iteration 6 ──────────────────────────────────────────────────────────
     def test_capture_removes_enemy_on_arrival(self):

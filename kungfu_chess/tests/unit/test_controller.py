@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 from unittest.mock import MagicMock
 from kungfu_chess.controller.controller import Controller
@@ -119,4 +121,3 @@ class TestController(unittest.TestCase):
 
         self.assertEqual(result.action, "ignored")
         mock_engine.jump.assert_not_called()
-    

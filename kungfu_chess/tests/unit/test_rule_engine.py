@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 from kungfu_chess.engine.rule_engine import RuleEngine
 from kungfu_chess.io.board_parser import parse_board
