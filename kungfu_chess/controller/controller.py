@@ -13,19 +13,20 @@ ControllerAction = Literal[
     "cancelled",
     "selected",
     "move_requested",
+    "jump_requested",
 ]
 
 
 @dataclass(frozen=True)
 class ControllerResult:
-    """Describe how the controller interpreted a click."""
+    """Describe how the controller interpreted one input action."""
 
     action: ControllerAction
     position: Position | None = None
 
 
 class Controller:
-    """Translate pixel clicks into selection and move requests."""
+    """Translate pixel input into selection and game-engine requests."""
 
     def __init__(self, mapper: BoardMapper, engine: GameEngine) -> None:
         self._mapper = mapper
@@ -36,6 +37,15 @@ class Controller:
     def selected(self) -> Position | None:
         """Return the currently selected logical board cell, if any."""
         return self._selected
+
+    def jump(self, x: int, y: int) -> ControllerResult:
+        """Map a jump command to a board cell and delegate it to the engine."""
+        pos = self._mapper.pixel_to_cell(x, y)
+        if pos is None:
+            return ControllerResult(action="ignored")
+
+        self._engine.jump(pos)
+        return ControllerResult(action="jump_requested", position=pos)
 
     def click(self, x: int, y: int) -> ControllerResult:
         """Interpret one pixel click without deciding move legality."""

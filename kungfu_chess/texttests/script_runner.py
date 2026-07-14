@@ -15,7 +15,6 @@ def run(lines: list[str]) -> None:
     commands = parse_script(lines)
     engine: GameEngine | None = None
     controller: Controller | None = None
-    mapper: BoardMapper | None = None
 
     for cmd in commands:
         if cmd[0] == "board":
@@ -27,8 +26,10 @@ def run(lines: list[str]) -> None:
                 controller = None
                 continue
             engine = GameEngine(board, RuleEngine(), RealTimeArbiter())
-            mapper = BoardMapper(board.width, board.height)
-            controller = Controller(mapper, engine)
+            controller = Controller(
+                BoardMapper(board.width, board.height),
+                engine,
+            )
 
         elif cmd[0] == "print_board" and engine is not None:
             sys.stdout.write(print_snapshot(engine.snapshot()) + "\n")
@@ -36,10 +37,8 @@ def run(lines: list[str]) -> None:
         elif cmd[0] == "click" and controller is not None:
             controller.click(cmd[1], cmd[2])
 
-        elif cmd[0] == "jump" and engine is not None:
-            pos = mapper.pixel_to_cell(cmd[1], cmd[2])
-            if pos is not None:
-                engine.jump(pos)
+        elif cmd[0] == "jump" and controller is not None:
+            controller.jump(cmd[1], cmd[2])
 
         elif cmd[0] == "wait" and engine is not None:
             engine.wait(cmd[1])
