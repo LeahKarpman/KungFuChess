@@ -127,6 +127,10 @@ class RealTimeArbiter:
                     ),
                 )
             )
+
+            if action.piece.state == "moving":
+                action.piece.state = "idle"
+
             del self._actions[piece_id]
 
         completed.sort(key=lambda item: item[:3])
@@ -166,6 +170,7 @@ class RealTimeArbiter:
             duration_ms=duration_ms,
             sequence=self._next_sequence,
         )
+        piece.state = "moving"
         self._next_sequence += 1
 
     @staticmethod

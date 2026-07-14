@@ -182,3 +182,33 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         self.assertIs(event.piece, self.piece)
         self.assertEqual(event.piece_id, self.piece.id)
+
+    def test_motion_updates_piece_lifecycle(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        self.assertEqual(self.piece.state, "moving")
+        self.assertEqual(self.arbiter.advance_time(999), [])
+        self.assertEqual(self.piece.state, "moving")
+
+        self.arbiter.advance_time(1)
+
+        self.assertEqual(self.piece.state, "idle")
+
+    def test_jump_updates_piece_lifecycle(self) -> None:
+        landing = Position(1, 1)
+        jumper = Piece("wK_1_1", "w", "K", landing)
+
+        self.arbiter.start_jump(jumper, landing)
+        self.assertEqual(jumper.state, "moving")
+
+        self.arbiter.advance_time(1000)
+
+        self.assertEqual(jumper.state, "idle")
+
+    def test_completion_does_not_revive_captured_piece(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+        self.piece.state = "captured"
+
+        self.arbiter.advance_time(1000)
+
+        self.assertEqual(self.piece.state, "captured")
