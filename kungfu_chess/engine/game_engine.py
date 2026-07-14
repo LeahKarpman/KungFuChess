@@ -86,11 +86,7 @@ class GameEngine:
         target = self._board.get_piece(event.destination)
 
         if target and target.color != piece.color:
-            target.state = "captured"
-            self._arbiter.cancel_action(target.id)
-            self._board.remove_piece(event.destination)
-            if target.kind == "K":
-                self._game_over = True
+            self._capture_piece(target, event.destination)
 
         if not self._board.get_piece(event.destination):
             piece.cell = event.destination
@@ -109,15 +105,19 @@ class GameEngine:
         self._board.remove_piece(event.source)
 
         if target:
-            target.state = "captured"
-            self._arbiter.cancel_action(target.id)
-            self._board.remove_piece(event.destination)
-            if target.kind == "K":
-                self._game_over = True
+            self._capture_piece(target, event.destination)
 
         piece.cell = event.destination
         self._board.add_piece(piece)
         self._try_promote(piece)
+
+    def _capture_piece(self, target: Piece, position: Position) -> None:
+        """Apply the complete lifecycle transition for a captured piece."""
+        target.state = "captured"
+        self._arbiter.cancel_action(target.id)
+        self._board.remove_piece(position)
+        if target.kind == "K":
+            self._game_over = True
 
     def _try_promote(self, piece: Piece) -> None:
         if piece.kind != "P":

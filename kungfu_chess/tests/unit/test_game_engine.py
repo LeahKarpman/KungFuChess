@@ -409,6 +409,20 @@ class TestLandingReservation(unittest.TestCase):
             board.get_piece(Position(1, 1)),
         )
 
+    def test_jump_capture_of_enemy_king_sets_game_over(self) -> None:
+        """Apply the king-capture rule through the jump arrival path."""
+        engine, board = _engine([". . .", "wP bK .", ". . ."])
+        engine.jump(Position(1, 0))
+        result = engine.request_move(Position(1, 1), Position(1, 0))
+
+        self.assertTrue(result.ok)
+        engine.wait(1000)
+
+        winner = board.get_piece(Position(1, 0))
+        self.assertIsNotNone(winner)
+        self.assertEqual(winner.color, "w")
+        self.assertTrue(engine.game_over)
+
 
 class TestJumpScheduling(unittest.TestCase):
     """Verify that jump timing is delegated to the real-time arbiter."""
