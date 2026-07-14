@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import Mock, patch
 from kungfu_chess.rules.rule_engine import RuleEngine
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.position import Position
@@ -44,21 +45,23 @@ class TestRuleEngineBoundary(unittest.TestCase):
         self.assertEqual(destinations, set())
 
     def test_delegates_to_the_matching_piece_rule(self) -> None:
-        """RuleEngine should defer to piece_rules rather than reimplement movement."""
-        board = parse_board(
-            [
-                ". . . . .",
-                ". wP wP wP .",
-                ". wP wN wP .",
-                ". wP wP wP .",
-                ". . . . .",
-            ]
-        )
+        """RuleEngine should look up and call the piece_rules rule, not reimplement movement."""
+        board = parse_board([". . .", ". wR .", ". . ."])
+        source = Position(1, 1)
+        piece = board.get_piece(source)
+        expected_destinations = {Position(9, 9)}
+        fake_rule = Mock(return_value=expected_destinations)
+        fake_destination_rule_for = Mock(return_value=fake_rule)
 
-        destinations = self.rules.legal_destinations(board, Position(2, 2))
+        with patch(
+            "kungfu_chess.rules.rule_engine.destination_rule_for",
+            fake_destination_rule_for,
+        ):
+            destinations = self.rules.legal_destinations(board, source)
 
-        self.assertIn(Position(0, 1), destinations)
-        self.assertIn(Position(4, 3), destinations)
+        fake_destination_rule_for.assert_called_once_with(piece.kind)
+        fake_rule.assert_called_once_with(board, source)
+        self.assertEqual(destinations, expected_destinations)
 
     def test_rule_queries_do_not_mutate_board_or_piece_state(self) -> None:
         board = parse_board(

@@ -45,7 +45,7 @@ class TestRookRules(unittest.TestCase):
         self.assertNotIn(Position(1, 2), dests)  # The friendly square is unavailable.
         self.assertNotIn(Position(0, 2), dests)  # Squares beyond it are unavailable.
 
-    def test_rook_includes_enemy_blocker(self):
+    def test_rook_includes_enemy_blocker_and_cannot_move_past_it(self):
         # An enemy pawn directly above the rook blocks its path.
         board = self._board(
             [
@@ -59,20 +59,6 @@ class TestRookRules(unittest.TestCase):
         dests = piece_rules.rook_destinations(board, Position(2, 2))
         self.assertIn(Position(1, 2), dests)  # The enemy square is capturable.
         self.assertNotIn(Position(0, 2), dests)  # Squares beyond it are unavailable.
-
-    def test_rook_cannot_pass_enemy_blocker(self):
-        board = self._board(
-            [
-                ". . . . .",
-                ". . bP . .",
-                ". . wR . .",
-                ". . . . .",
-                ". . . . .",
-            ]
-        )
-        dests = piece_rules.rook_destinations(board, Position(2, 2))
-        self.assertIn(Position(1, 2), dests)
-        self.assertNotIn(Position(0, 2), dests)
 
     def test_rook_cannot_move_diagonally(self):
         board = self._board(
