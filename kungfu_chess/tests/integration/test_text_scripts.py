@@ -6,91 +6,109 @@ from kungfu_chess.texttests.script_runner import run
 
 class TestTextScripts(unittest.TestCase):
     def _run(self, lines: list[str]) -> str:
-        with patch('sys.stdout', new_callable=StringIO) as mock_out:
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
             run(lines)
             return mock_out.getvalue()
 
     # ── Iteration 1 ──────────────────────────────────────────────────────────
     def test_board_then_print(self):
-        out = self._run(['Board', 'wK .', '. bK', 'print board'])
-        self.assertEqual(out, 'wK .\n. bK\n')
+        out = self._run(["Board", "wK .", ". bK", "print board"])
+        self.assertEqual(out, "wK .\n. bK\n")
 
     # ── Iteration 5 ──────────────────────────────────────────────────────────
     def test_move_before_arrival_board_unchanged(self):
         lines = [
-            'Board',
-            '. wR .',
-            '. . .',
-            '. . bK',
-            'click 150 50',
-            'click 150 250',
-            'wait 1000',
-            'print board',
+            "Board",
+            ". wR .",
+            ". . .",
+            ". . bK",
+            "click 150 50",
+            "click 150 250",
+            "wait 1000",
+            "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, '. wR .\n. . .\n. . bK\n')
+        self.assertEqual(out, ". wR .\n. . .\n. . bK\n")
 
     def test_move_after_arrival_board_updated(self):
         lines = [
-            'Board',
-            '. wR .',
-            '. . .',
-            '. . bK',
-            'click 150 50',
-            'click 150 250',
-            'wait 1000',
-            'print board',
-            'wait 1000',
-            'print board',
+            "Board",
+            ". wR .",
+            ". . .",
+            ". . bK",
+            "click 150 50",
+            "click 150 250",
+            "wait 1000",
+            "print board",
+            "wait 1000",
+            "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, '. wR .\n. . .\n. . bK\n. . .\n. . .\n. wR bK\n')
+        self.assertEqual(out, ". wR .\n. . .\n. . bK\n. . .\n. . .\n. wR bK\n")
 
     def test_second_move_while_motion_active_rejected(self):
-        # The rook moves two cells in 2000 ms; a second move is rejected.
+        # A moving piece cannot be redirected before it arrives.
         lines = [
-            'Board',
-            '. wR . .',
-            '. . . .',
-            'click 150 50',
-            'click 350 50',
-            'click 150 50',
-            'wait 2000',
-            'print board',
+            "Board",
+            ". wR . .",
+            ". . . .",
+            "click 150 50",
+            "click 350 50",
+            "click 150 50",
+            "wait 2000",
+            "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, '. . . wR\n. . . .\n')
+        self.assertEqual(out, ". . . wR\n. . . .\n")
+
+    def test_distinct_pieces_move_concurrently(self):
+        lines = [
+            "Board",
+            "wR . .",
+            ". . .",
+            "bR . .",
+            "click 50 50",
+            "click 250 50",
+            "click 50 250",
+            "click 250 250",
+            "wait 2000",
+            "print board",
+        ]
+
+        out = self._run(lines)
+
+        self.assertEqual(out, ". . wR\n. . .\n. . bR\n")
 
     # ── Iteration 6 ──────────────────────────────────────────────────────────
     def test_capture_removes_enemy_on_arrival(self):
         lines = [
-            'Board',
-            'wR . bK',
-            '. . wN',
-            '. . .',
-            'click 50 50',
-            'click 250 50',
-            'wait 2000',
-            'print board',
+            "Board",
+            "wR . bK",
+            ". . wN",
+            ". . .",
+            "click 50 50",
+            "click 250 50",
+            "wait 2000",
+            "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, '. . wR\n. . wN\n. . .\n')
+        self.assertEqual(out, ". . wR\n. . wN\n. . .\n")
 
     def test_game_over_blocks_further_moves(self):
         lines = [
-            'Board',
-            'wR . bK',
-            '. . wN',
-            '. . .',
-            'click 50 50',
-            'click 250 50',
-            'wait 2000',
-            'print board',
-            'click 250 150',
-            'click 50 250',
-            'wait 2000',
-            'print board',
+            "Board",
+            "wR . bK",
+            ". . wN",
+            ". . .",
+            "click 50 50",
+            "click 250 50",
+            "wait 2000",
+            "print board",
+            "click 250 150",
+            "click 50 250",
+            "wait 2000",
+            "print board",
         ]
         out = self._run(lines)
         # The board does not change after the king is captured.
-        self.assertEqual(out, '. . wR\n. . wN\n. . .\n. . wR\n. . wN\n. . .\n')
+        self.assertEqual(out, ". . wR\n. . wN\n. . .\n. . wR\n. . wN\n. . .\n")

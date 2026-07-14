@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
+
 from ..model.piece import Piece
 from ..model.position import Position
 
@@ -74,6 +76,10 @@ class RealTimeArbiter:
     def is_piece_busy(self, piece_id: str) -> bool:
         """Return whether the piece already has any scheduled action."""
         return piece_id in self._actions
+
+    def cancel_action(self, piece_id: str) -> None:
+        """Stop a scheduled action without changing the piece lifecycle."""
+        self._actions.pop(piece_id, None)
 
     def start_motion(
         self,

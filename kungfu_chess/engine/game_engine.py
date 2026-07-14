@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 from ..model.board import Board
 from ..model.piece import Piece
 from ..model.position import Position
@@ -39,12 +41,13 @@ class GameEngine:
         """Validate and schedule a move without mutating settled board cells."""
         if self._game_over:
             return MoveResult(ok=False, reason="game_over")
-        if self._arbiter.has_active_motion():
-            return MoveResult(ok=False, reason="motion_in_progress")
+
+        piece = self._board.get_piece(src)
+        if piece is not None and self._arbiter.is_piece_busy(piece.id):
+            return MoveResult(ok=False, reason="piece_busy")
 
         jump = self._arbiter.active_jump_at(dst)
         if jump is not None:
-            piece = self._board.get_piece(src)
             if piece is not None and piece.color == jump.piece_color:
                 return MoveResult(ok=False, reason="landing_reserved")
 
@@ -52,7 +55,6 @@ class GameEngine:
         if not validation.ok:
             return MoveResult(ok=False, reason=validation.reason)
 
-        piece = self._board.get_piece(src)
         if piece is None:
             return MoveResult(ok=False, reason="no_piece_at_source")
 
@@ -85,6 +87,7 @@ class GameEngine:
 
         if target and target.color != piece.color:
             target.state = "captured"
+            self._arbiter.cancel_action(target.id)
             self._board.remove_piece(event.destination)
             if target.kind == "K":
                 self._game_over = True
@@ -99,11 +102,15 @@ class GameEngine:
         if self._board.get_piece(event.source) is not piece:
             return
 
-        self._board.remove_piece(event.source)
         target = self._board.get_piece(event.destination)
+        if target is not None and target.color == piece.color:
+            return
+
+        self._board.remove_piece(event.source)
 
         if target:
             target.state = "captured"
+            self._arbiter.cancel_action(target.id)
             self._board.remove_piece(event.destination)
             if target.kind == "K":
                 self._game_over = True

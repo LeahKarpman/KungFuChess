@@ -94,6 +94,18 @@ class TestRealTimeArbiter(unittest.TestCase):
                 Position(0, 2),
             )
 
+    def test_cancel_action_stops_motion_without_changing_piece_state(
+        self,
+    ) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+        self.piece.state = "captured"
+
+        self.arbiter.cancel_action(self.piece.id)
+
+        self.assertFalse(self.arbiter.is_piece_busy(self.piece.id))
+        self.assertEqual(self.arbiter.advance_time(1000), [])
+        self.assertEqual(self.piece.state, "captured")
+
     def test_advance_time_returns_every_completed_motion(self) -> None:
         second_source = Position(2, 0)
         second_piece = Piece("bR_2_0", "b", "R", second_source)
