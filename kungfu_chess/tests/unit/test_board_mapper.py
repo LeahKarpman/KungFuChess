@@ -23,3 +23,10 @@ class TestBoardMapper(unittest.TestCase):
         self.assertIsNone(self.mapper.pixel_to_cell(800, 0))
         self.assertIsNone(self.mapper.pixel_to_cell(0, 800))
         self.assertIsNone(self.mapper.pixel_to_cell(-1, 0))
+
+    def test_rejects_non_positive_cell_size(self) -> None:
+        """Reject mapper configurations that cannot represent board cells."""
+        for cell_size in (0, -100):
+            with self.subTest(cell_size=cell_size):
+                with self.assertRaisesRegex(ValueError, "^invalid_cell_size$"):
+                    BoardMapper(width=8, height=8, cell_size=cell_size)

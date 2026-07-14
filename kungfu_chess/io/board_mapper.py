@@ -6,6 +6,8 @@ CELL_SIZE = 100
 
 class BoardMapper:
     def __init__(self, width: int, height: int, cell_size: int = CELL_SIZE) -> None:
+        if cell_size <= 0:
+            raise ValueError("invalid_cell_size")
         self._width = width
         self._height = height
         self._cell_size = cell_size

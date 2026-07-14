@@ -57,8 +57,8 @@ class Controller:
                 return ControllerResult(action="cancelled")
             return ControllerResult(action="ignored")
 
-        pieces = self._engine.snapshot().pieces
-        piece_at_pos = next((p for p in pieces if p.cell == pos), None)
+        pieces_by_cell = {piece.cell: piece for piece in self._engine.snapshot().pieces}
+        piece_at_pos = pieces_by_cell.get(pos)
 
         if self._selected is None:
             if piece_at_pos is None or piece_at_pos.state == "moving":
@@ -66,10 +66,7 @@ class Controller:
             self._selected = pos
             return ControllerResult(action="selected", position=pos)
 
-        selected_piece = next(
-            (p for p in pieces if p.cell == self._selected),
-            None,
-        )
+        selected_piece = pieces_by_cell.get(self._selected)
         if (
             piece_at_pos is not None
             and piece_at_pos.state != "moving"

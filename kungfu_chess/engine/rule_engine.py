@@ -7,6 +7,27 @@ from ..model.position import Position
 
 DestinationRule = Callable[[Board, Position], set[Position]]
 
+_KNIGHT_OFFSETS = (
+    (-2, -1),
+    (-2, 1),
+    (-1, -2),
+    (-1, 2),
+    (1, -2),
+    (1, 2),
+    (2, -1),
+    (2, 1),
+)
+_KING_OFFSETS = (
+    (-1, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (1, 0),
+    (1, 1),
+)
+
 
 @dataclass(frozen=True)
 class MoveValidation:
@@ -14,7 +35,9 @@ class MoveValidation:
     reason: str
 
 
-def _sliding(board: Board, src: Position, directions: list[tuple[int, int]]) -> set[Position]:
+def _sliding(
+    board: Board, src: Position, directions: list[tuple[int, int]]
+) -> set[Position]:
     destinations: set[Position] = set()
     piece = board.get_piece(src)
     for dr, dc in directions:
@@ -40,38 +63,41 @@ def _bishop_destinations(board: Board, src: Position) -> set[Position]:
     return _sliding(board, src, [(-1, -1), (-1, 1), (1, -1), (1, 1)])
 
 
-def _knight_destinations(board: Board, src: Position) -> set[Position]:
+def _offset_destinations(
+    board: Board,
+    src: Position,
+    offsets: tuple[tuple[int, int], ...],
+) -> set[Position]:
+    """Return in-bounds offset destinations not occupied by a friendly piece."""
     destinations: set[Position] = set()
     piece = board.get_piece(src)
-    for dr, dc in [(-2, -1), (-2, 1), (-1, -2), (-1, 2), (1, -2), (1, 2), (2, -1), (2, 1)]:
+    assert piece is not None
+
+    for dr, dc in offsets:
         pos = Position(src.row + dr, src.col + dc)
-        if board.in_bounds(pos):
-            blocker = board.get_piece(pos)
-            if not blocker or blocker.color != piece.color:
-                destinations.add(pos)
+        if not board.in_bounds(pos):
+            continue
+
+        blocker = board.get_piece(pos)
+        if blocker is None or blocker.color != piece.color:
+            destinations.add(pos)
+
     return destinations
+
+
+def _knight_destinations(board: Board, src: Position) -> set[Position]:
+    return _offset_destinations(board, src, _KNIGHT_OFFSETS)
 
 
 def _king_destinations(board: Board, src: Position) -> set[Position]:
-    destinations: set[Position] = set()
-    piece = board.get_piece(src)
-    for dr in [-1, 0, 1]:
-        for dc in [-1, 0, 1]:
-            if dr == 0 and dc == 0:
-                continue
-            pos = Position(src.row + dr, src.col + dc)
-            if board.in_bounds(pos):
-                blocker = board.get_piece(pos)
-                if not blocker or blocker.color != piece.color:
-                    destinations.add(pos)
-    return destinations
+    return _offset_destinations(board, src, _KING_OFFSETS)
 
 
 def _pawn_destinations(board: Board, src: Position) -> set[Position]:
     destinations: set[Position] = set()
     piece = board.get_piece(src)
-    direction = -1 if piece.color == 'w' else 1
-    start_row = board.height - 2 if piece.color == 'w' else 1
+    direction = -1 if piece.color == "w" else 1
+    start_row = board.height - 2 if piece.color == "w" else 1
 
     forward = Position(src.row + direction, src.col)
     if board.in_bounds(forward) and not board.get_piece(forward):
@@ -92,12 +118,12 @@ def _pawn_destinations(board: Board, src: Position) -> set[Position]:
 
 
 _DESTINATIONS: dict[str, DestinationRule] = {
-    'R': _rook_destinations,
-    'B': _bishop_destinations,
-    'Q': lambda b, s: _rook_destinations(b, s) | _bishop_destinations(b, s),
-    'N': _knight_destinations,
-    'K': _king_destinations,
-    'P': _pawn_destinations,
+    "R": _rook_destinations,
+    "B": _bishop_destinations,
+    "Q": lambda b, s: _rook_destinations(b, s) | _bishop_destinations(b, s),
+    "N": _knight_destinations,
+    "K": _king_destinations,
+    "P": _pawn_destinations,
 }
 
 
@@ -109,9 +135,11 @@ class RuleEngine:
         fn = _DESTINATIONS.get(piece.kind)
         return fn(board, src) if fn else set()
 
-    def validate_move(self, board: Board, src: Position, dst: Position) -> MoveValidation:
+    def validate_move(
+        self, board: Board, src: Position, dst: Position
+    ) -> MoveValidation:
         if not board.get_piece(src):
-            return MoveValidation(ok=False, reason='no_piece_at_source')
+            return MoveValidation(ok=False, reason="no_piece_at_source")
         if dst not in self.legal_destinations(board, src):
-            return MoveValidation(ok=False, reason='illegal_move')
-        return MoveValidation(ok=True, reason='ok')
+            return MoveValidation(ok=False, reason="illegal_move")
+        return MoveValidation(ok=True, reason="ok")
