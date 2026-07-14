@@ -4,6 +4,8 @@ from .position import Position
 
 
 class Board:
+    """Store settled pieces within fixed logical board dimensions."""
+
     width: int
     height: int
     _cells: dict[Position, Piece]
@@ -17,6 +19,9 @@ class Board:
         return 0 <= pos.row < self.height and 0 <= pos.col < self.width
 
     def add_piece(self, piece: Piece) -> None:
+        """Place a piece in an unoccupied in-bounds cell."""
+        if not self.in_bounds(piece.cell):
+            raise ValueError("piece_out_of_bounds")
         if piece.cell in self._cells:
             raise ValueError(f"Cell {piece.cell} is already occupied")
         self._cells[piece.cell] = piece
