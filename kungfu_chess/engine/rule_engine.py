@@ -1,11 +1,12 @@
 from __future__ import annotations
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Callable, Set
+
 from ..model.board import Board
 from ..model.position import Position
 
 
-DestinationRule = Callable[[Board, Position], set[Position]]
+DestinationRule = Callable[[Board, Position], Set[Position]]
 
 _KNIGHT_OFFSETS = (
     (-2, -1),
