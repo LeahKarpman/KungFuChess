@@ -112,6 +112,23 @@ class TestTextScripts(unittest.TestCase):
 
         self.assertEqual(out, ". wK .\n")
 
+    def test_malformed_commands_are_ignored_without_stopping_script(self):
+        """Continue to valid commands after malformed text input."""
+        lines = [
+            "Board:",
+            "wK .",
+            "Commands:",
+            "click 50",
+            "jump x 50",
+            "wait abc",
+            "click 50 50 extra",
+            "print board",
+        ]
+
+        out = self._run(lines)
+
+        self.assertEqual(out, "wK .\n")
+
     # ── Iteration 6 ──────────────────────────────────────────────────────────
     def test_capture_removes_enemy_on_arrival(self):
         lines = [
