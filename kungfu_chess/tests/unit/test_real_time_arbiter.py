@@ -46,6 +46,17 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         self.assertEqual(len(events), 1)
 
+    def test_negative_time_does_not_rewind_active_action(self) -> None:
+        """Keep simulated time monotonic when given a negative duration."""
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        self.assertEqual(self.arbiter.advance_time(500), [])
+        self.assertEqual(self.arbiter.advance_time(-250), [])
+        events = self.arbiter.advance_time(500)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].piece_id, self.piece.id)
+
     def test_two_cell_move_takes_2000ms(self) -> None:
         self.arbiter.start_motion(
             self.piece,

@@ -114,6 +114,9 @@ class RealTimeArbiter:
 
     def advance_time(self, ms: int) -> list[ArrivalEvent]:
         """Advance every action and return events in resolution order."""
+        if ms <= 0:
+            return []
+
         completed: list[tuple[int, int, int, ArrivalEvent]] = []
 
         for piece_id, action in tuple(self._actions.items()):
