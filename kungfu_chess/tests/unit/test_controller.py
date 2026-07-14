@@ -87,12 +87,13 @@ class TestController(unittest.TestCase):
         self.assertEqual(result.action, "ignored")
         self.assertIsNone(controller.selected)
 
-    def test_clicking_moving_piece_preserves_existing_selection(self) -> None:
-        controller, engine = _setup(["wR . wK"])
-        engine.request_move(Position(0, 0), Position(0, 1))
-        controller.click(250, 50)
+    def test_selected_piece_can_target_moving_enemy(self) -> None:
+        """Forward a moving enemy cell as the selected piece's destination."""
+        controller, engine = _setup([". . .", "wK bR .", ". . ."])
+        engine.jump(Position(1, 0))
+        controller.click(150, 150)
 
-        result = controller.click(50, 50)
+        result = controller.click(50, 150)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertEqual(controller.selected, Position(0, 2))
+        self.assertEqual(result.action, "move_requested")
+        self.assertIsNone(controller.selected)

@@ -183,6 +183,16 @@ class TestGameEngine(unittest.TestCase):
             "idle",
         )
 
+    def test_snapshot_and_nested_piece_views_are_immutable(self) -> None:
+        engine, _ = _engine(["wR . ."])
+        snapshot = engine.snapshot()
+
+        with self.assertRaises(AttributeError):
+            setattr(snapshot, "game_over", True)
+
+        with self.assertRaises(AttributeError):
+            setattr(snapshot.pieces[0], "state", "captured")
+
     def test_captured_piece_keeps_captured_state(self) -> None:
         engine, board = _engine(["wR . bK"])
         captured_piece = board.get_piece(Position(0, 2))
@@ -402,6 +412,21 @@ class TestLandingReservation(unittest.TestCase):
 
 class TestJumpScheduling(unittest.TestCase):
     """Verify that jump timing is delegated to the real-time arbiter."""
+
+    def test_snapshot_includes_airborne_piece_and_jump_action(self) -> None:
+        engine, _ = _engine([". wK ."])
+        landing = Position(0, 1)
+
+        engine.jump(landing)
+        snapshot = engine.snapshot()
+
+        self.assertEqual(len(snapshot.pieces), 1)
+        self.assertEqual(snapshot.pieces[0].id, "wK_0_1")
+        self.assertEqual(snapshot.pieces[0].cell, landing)
+        self.assertEqual(snapshot.pieces[0].state, "moving")
+        self.assertEqual(len(snapshot.motions), 1)
+        self.assertEqual(snapshot.motions[0].piece_id, "wK_0_1")
+        self.assertEqual(snapshot.motions[0].action_kind, "jump")
 
     def test_jump_marks_piece_busy_in_arbiter(self) -> None:
         board = parse_board([". wK ."])

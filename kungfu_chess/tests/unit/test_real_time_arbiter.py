@@ -138,6 +138,24 @@ class TestRealTimeArbiter(unittest.TestCase):
         with self.assertRaises(AttributeError):
             setattr(motions[0], "elapsed_ms", 500)
 
+    def test_active_actions_include_moves_and_jumps(self) -> None:
+        landing = Position(1, 1)
+        jumper = Piece("wK_1_1", "w", "K", landing)
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+        self.arbiter.start_jump(jumper, landing)
+
+        actions = self.arbiter.active_actions()
+
+        self.assertEqual(
+            {action.action_kind for action in actions},
+            {"move", "jump"},
+        )
+        self.assertEqual(
+            {action.piece_kind for action in actions},
+            {"R", "K"},
+        )
+        self.assertTrue(all(not hasattr(action, "piece") for action in actions))
+
     def test_jump_is_scheduled_without_becoming_active_motion(self) -> None:
         landing = Position(1, 1)
         jumper = Piece("wK_1_1", "w", "K", landing)

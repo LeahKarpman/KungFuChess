@@ -79,6 +79,25 @@ class TestTextScripts(unittest.TestCase):
 
         self.assertEqual(out, ". . wR\n. . .\n. . bR\n")
 
+    def test_airborne_piece_captures_arriving_enemy(self):
+        """Exercise the complete click route for an airborne capture."""
+        lines = [
+            "Board:",
+            ". . .",
+            "wK bR .",
+            ". . .",
+            "Commands:",
+            "jump 50 150",
+            "click 150 150",
+            "click 50 150",
+            "wait 1000",
+            "print board",
+        ]
+
+        out = self._run(lines)
+
+        self.assertEqual(out, ". . .\nwK . .\n. . .\n")
+
     # ── Iteration 6 ──────────────────────────────────────────────────────────
     def test_capture_removes_enemy_on_arrival(self):
         lines = [

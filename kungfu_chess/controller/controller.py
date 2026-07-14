@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
+
 from ..engine.game_engine import GameEngine
 from ..io.board_mapper import BoardMapper
 from ..model.position import Position
+
 
 ControllerAction = Literal[
     "ignored",
@@ -47,11 +50,8 @@ class Controller:
         pieces = self._engine.snapshot().pieces
         piece_at_pos = next((p for p in pieces if p.cell == pos), None)
 
-        if piece_at_pos is not None and piece_at_pos.state == "moving":
-            return ControllerResult(action="ignored")
-
         if self._selected is None:
-            if piece_at_pos is None:
+            if piece_at_pos is None or piece_at_pos.state == "moving":
                 return ControllerResult(action="ignored")
             self._selected = pos
             return ControllerResult(action="selected", position=pos)
@@ -62,6 +62,7 @@ class Controller:
         )
         if (
             piece_at_pos is not None
+            and piece_at_pos.state != "moving"
             and selected_piece is not None
             and piece_at_pos.color == selected_piece.color
         ):

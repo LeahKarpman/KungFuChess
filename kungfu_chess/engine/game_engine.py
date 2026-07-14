@@ -129,22 +129,37 @@ class GameEngine:
 
     def snapshot(self, selected: Position | None = None) -> GameSnapshot:
         """Return an immutable representation of the current game state."""
-        pieces = tuple(
+        active_actions = self._arbiter.active_actions()
+        pieces = [
             PieceSnapshot(p.id, p.color, p.kind, p.cell, p.state)
             for p in self._board.all_pieces()
+        ]
+        visible_piece_ids = {piece.id for piece in pieces}
+
+        pieces.extend(
+            PieceSnapshot(
+                action.piece_id,
+                action.piece_color,
+                action.piece_kind,
+                action.source,
+                "moving",
+            )
+            for action in active_actions
+            if action.piece_id not in visible_piece_ids
         )
         motions = tuple(
             MotionSnapshot(
-                motion.piece_id,
-                motion.source,
-                motion.destination,
-                motion.elapsed_ms,
-                motion.duration_ms,
+                piece_id=action.piece_id,
+                source=action.source,
+                destination=action.destination,
+                elapsed_ms=action.elapsed_ms,
+                duration_ms=action.duration_ms,
+                action_kind=action.action_kind,
             )
-            for motion in self._arbiter.active_motions()
+            for action in active_actions
         )
         return GameSnapshot(
-            pieces=pieces,
+            pieces=tuple(pieces),
             motions=motions,
             selected=selected,
             game_over=self._game_over,

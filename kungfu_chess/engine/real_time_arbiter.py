@@ -40,6 +40,7 @@ class ActiveAction:
 
     piece_id: str
     piece_color: str
+    piece_kind: str
     action_kind: ActionKind
     source: Position
     destination: Position
@@ -145,9 +146,13 @@ class RealTimeArbiter:
     def active_motions(self) -> tuple[ActiveAction, ...]:
         """Return immutable views of active regular moves."""
         return tuple(
-            self._to_active_action(action)
-            for action in self._actions.values()
-            if action.action_kind == "move"
+            action for action in self.active_actions() if action.action_kind == "move"
+        )
+
+    def active_actions(self) -> tuple[ActiveAction, ...]:
+        """Return immutable views of every currently scheduled action."""
+        return tuple(
+            self._to_active_action(action) for action in self._actions.values()
         )
 
     def active_jump_at(self, landing: Position) -> ActiveAction | None:
@@ -184,6 +189,7 @@ class RealTimeArbiter:
         return ActiveAction(
             piece_id=action.piece.id,
             piece_color=action.piece.color,
+            piece_kind=action.piece.kind,
             action_kind=action.action_kind,
             source=action.source,
             destination=action.destination,
