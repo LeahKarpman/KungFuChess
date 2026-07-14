@@ -166,9 +166,3 @@ class GameEngine:
             width=self._board.width,
             height=self._board.height,
         )
-
-    def board_text(self) -> str:
-        """Render the settled logical board as canonical text."""
-        from ..io.board_printer import print_board
-
-        return print_board(self._board)

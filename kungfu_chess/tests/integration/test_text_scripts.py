@@ -98,6 +98,20 @@ class TestTextScripts(unittest.TestCase):
 
         self.assertEqual(out, ". . .\nwK . .\n. . .\n")
 
+    def test_print_board_keeps_airborne_piece_visible_before_landing(self):
+        """Render the pre-arrival state from the public game snapshot."""
+        lines = [
+            "Board:",
+            ". wK .",
+            "Commands:",
+            "jump 150 50",
+            "print board",
+        ]
+
+        out = self._run(lines)
+
+        self.assertEqual(out, ". wK .\n")
+
     # ── Iteration 6 ──────────────────────────────────────────────────────────
     def test_capture_removes_enemy_on_arrival(self):
         lines = [
