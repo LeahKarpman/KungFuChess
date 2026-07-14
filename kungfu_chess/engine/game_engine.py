@@ -7,7 +7,7 @@ from ..model.piece import Piece
 from ..model.position import Position
 from .game_snapshot import GameSnapshot, MotionSnapshot, PieceSnapshot
 from .real_time_arbiter import ArrivalEvent, RealTimeArbiter
-from .rule_engine import RuleEngine
+from ..rules.rule_engine import RuleEngine
 
 
 @dataclass(frozen=True)

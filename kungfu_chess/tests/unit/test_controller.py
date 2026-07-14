@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from kungfu_chess.controller.controller import Controller
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.engine.real_time_arbiter import RealTimeArbiter
-from kungfu_chess.engine.rule_engine import RuleEngine
+from kungfu_chess.rules.rule_engine import RuleEngine
 from kungfu_chess.io.board_mapper import BoardMapper
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.position import Position

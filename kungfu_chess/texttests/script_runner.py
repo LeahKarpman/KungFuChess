@@ -5,7 +5,7 @@ from .script_parser import parse_script
 from ..io.board_parser import parse_board
 from ..io.board_mapper import BoardMapper
 from ..io.board_printer import print_snapshot
-from ..engine.rule_engine import RuleEngine
+from ..rules.rule_engine import RuleEngine
 from ..engine.real_time_arbiter import RealTimeArbiter
 from ..engine.game_engine import GameEngine
 from ..controller.controller import Controller
