@@ -1,6 +1,6 @@
 import unittest
 
-from kungfu_chess.engine.real_time_arbiter import RealTimeArbiter
+from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 
@@ -55,7 +55,7 @@ class TestRealTimeArbiter(unittest.TestCase):
         events = self.arbiter.advance_time(500)
 
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].piece_id, self.piece.id)
+        self.assertEqual(events[0].piece.id, self.piece.id)
 
     def test_two_cell_move_takes_2000ms(self) -> None:
         self.arbiter.start_motion(
@@ -80,7 +80,7 @@ class TestRealTimeArbiter(unittest.TestCase):
         events = self.arbiter.advance_time(1)
 
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].piece_id, knight.id)
+        self.assertEqual(events[0].piece.id, knight.id)
 
     def test_multiple_waits_accumulate(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
@@ -144,7 +144,7 @@ class TestRealTimeArbiter(unittest.TestCase):
         events = self.arbiter.advance_time(1000)
 
         self.assertEqual(
-            [event.piece_id for event in events],
+            [event.piece.id for event in events],
             ["wR_0_0", "bR_2_0"],
         )
         self.assertEqual(self.arbiter.active_actions(), ())
@@ -225,7 +225,7 @@ class TestRealTimeArbiter(unittest.TestCase):
         event = self.arbiter.advance_time(1000)[0]
 
         self.assertIs(event.piece, self.piece)
-        self.assertEqual(event.piece_id, self.piece.id)
+        self.assertEqual(event.piece.id, self.piece.id)
 
     def test_motion_updates_piece_lifecycle(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)

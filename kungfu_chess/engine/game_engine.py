@@ -6,7 +6,8 @@ from ..model.board import Board
 from ..model.piece import Piece
 from ..model.position import Position
 from .game_snapshot import GameSnapshot, MotionSnapshot, PieceSnapshot
-from .real_time_arbiter import ArrivalEvent, RealTimeArbiter
+from ..realtime.motion import ArrivalEvent
+from ..realtime.real_time_arbiter import RealTimeArbiter
 from ..rules.rule_engine import RuleEngine
 
 
