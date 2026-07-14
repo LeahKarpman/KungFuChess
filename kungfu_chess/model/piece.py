@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 VALID_COLORS = {"w", "b"}
 VALID_KINDS = {"K", "Q", "R", "B", "N", "P"}
 PieceState = Literal["idle", "moving", "captured"]
+VALID_STATES = {"idle", "moving", "captured"}
 
 
 class Piece:
@@ -27,6 +28,13 @@ class Piece:
         cell: Position,
         state: PieceState = "idle",
     ) -> None:
+        if color not in VALID_COLORS:
+            raise ValueError("invalid_piece_color")
+        if kind not in VALID_KINDS:
+            raise ValueError("invalid_piece_kind")
+        if state not in VALID_STATES:
+            raise ValueError("invalid_piece_state")
+
         self.id = id
         self.color = color
         self.kind = kind
