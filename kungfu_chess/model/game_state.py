@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from typing import Literal
 
-from ..model.piece import PieceState
-from ..model.position import Position
+from .piece import PieceState
+from .position import Position
 
 
 @dataclass(frozen=True)

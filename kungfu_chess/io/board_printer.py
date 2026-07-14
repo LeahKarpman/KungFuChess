@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..engine.game_snapshot import GameSnapshot
+from ..model.game_state import GameSnapshot
 from ..model.board import Board
 from ..model.position import Position
 
