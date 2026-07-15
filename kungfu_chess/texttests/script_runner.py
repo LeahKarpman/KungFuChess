@@ -3,12 +3,12 @@ import sys
 
 from .script_parser import parse_script
 from ..io.board_parser import parse_board
-from ..io.board_mapper import BoardMapper
+from ..input.board_mapper import BoardMapper
 from ..io.board_printer import print_snapshot
 from ..rules.rule_engine import RuleEngine
 from ..realtime.real_time_arbiter import RealTimeArbiter
 from ..engine.game_engine import GameEngine
-from ..controller.controller import Controller
+from ..input.controller import Controller
 
 
 def run(lines: list[str]) -> None:

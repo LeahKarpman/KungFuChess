@@ -1,5 +1,5 @@
 import unittest
-from kungfu_chess.io.board_mapper import BoardMapper
+from kungfu_chess.input.board_mapper import BoardMapper
 from kungfu_chess.model.position import Position
 
 

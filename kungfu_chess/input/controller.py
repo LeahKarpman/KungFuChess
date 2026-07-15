@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ..engine.game_engine import GameEngine
-from ..io.board_mapper import BoardMapper
+from .board_mapper import BoardMapper
 from ..model.position import Position
 
 
