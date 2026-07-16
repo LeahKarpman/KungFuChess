@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+import cv2
 import numpy as np
 
 from kungfu_chess.ui.img import Img
@@ -59,6 +60,96 @@ class TestImgWindowOperations(unittest.TestCase):
             Img.close_all_windows()
 
         mocked_cv2.destroyAllWindows.assert_called_once()
+
+
+class TestImgMouseCallback(unittest.TestCase):
+    """Verify left-click delegation without opening a real OpenCV window.
+
+    namedWindow/setMouseCallback are mocked out so no real window is created,
+    but the real cv2 event constants are used so the tests exercise the exact
+    event codes OpenCV would deliver.
+    """
+
+    @staticmethod
+    def _capture_on_mouse(mocked_set_mouse_callback) -> object:
+        return mocked_set_mouse_callback.call_args.args[1]
+
+    def test_left_button_down_invokes_public_callback_with_coordinates(self) -> None:
+        callback = MagicMock()
+        with patch("kungfu_chess.ui.img.cv2.namedWindow") as mocked_named_window, patch(
+            "kungfu_chess.ui.img.cv2.setMouseCallback"
+        ) as mocked_set_mouse_callback:
+            Img.set_left_click_callback("Kung-Fu Chess", callback)
+            mocked_named_window.assert_called_once_with("Kung-Fu Chess")
+            on_mouse = self._capture_on_mouse(mocked_set_mouse_callback)
+
+        on_mouse(cv2.EVENT_LBUTTONDOWN, 42, 84, 0, None)
+
+        callback.assert_called_once_with(42, 84)
+
+    def test_unrelated_mouse_events_do_not_invoke_public_callback(self) -> None:
+        callback = MagicMock()
+        with patch("kungfu_chess.ui.img.cv2.namedWindow"), patch(
+            "kungfu_chess.ui.img.cv2.setMouseCallback"
+        ) as mocked_set_mouse_callback:
+            Img.set_left_click_callback("Kung-Fu Chess", callback)
+            on_mouse = self._capture_on_mouse(mocked_set_mouse_callback)
+
+        on_mouse(cv2.EVENT_MOUSEMOVE, 10, 20, 0, None)
+        on_mouse(cv2.EVENT_RBUTTONDOWN, 10, 20, 0, None)
+        on_mouse(cv2.EVENT_LBUTTONUP, 10, 20, 0, None)
+
+        callback.assert_not_called()
+
+    def test_public_callback_receives_only_x_and_y(self) -> None:
+        """OpenCV event/flags/userdata details must not leak past Img."""
+        callback = MagicMock()
+        with patch("kungfu_chess.ui.img.cv2.namedWindow"), patch(
+            "kungfu_chess.ui.img.cv2.setMouseCallback"
+        ) as mocked_set_mouse_callback:
+            Img.set_left_click_callback("Kung-Fu Chess", callback)
+            on_mouse = self._capture_on_mouse(mocked_set_mouse_callback)
+
+        on_mouse(cv2.EVENT_LBUTTONDOWN, 7, 9, 123, object())
+
+        callback.assert_called_once_with(7, 9)
+
+
+class TestImgDrawRectangle(unittest.TestCase):
+    def test_draw_rectangle_changes_expected_border_pixels(self) -> None:
+        img = Img()
+        img.img = np.zeros((20, 20, 3), dtype=np.uint8)
+
+        img.draw_rectangle((2, 2), (10, 10), (255, 255, 255), 1)
+
+        self.assertTrue((img.img[2, 5] == 255).all())
+        self.assertTrue((img.img[5, 2] == 255).all())
+
+    def test_pixels_outside_border_remain_unchanged(self) -> None:
+        img = Img()
+        img.img = np.zeros((20, 20, 3), dtype=np.uint8)
+
+        img.draw_rectangle((2, 2), (10, 10), (255, 255, 255), 1)
+
+        self.assertTrue((img.img[5, 5] == 0).all())  # inside the (unfilled) rectangle
+        self.assertTrue((img.img[0, 0] == 0).all())  # outside the rectangle entirely
+
+    def test_draw_rectangle_on_unloaded_image_raises_clear_error(self) -> None:
+        img = Img()
+        with self.assertRaisesRegex(ValueError, "not loaded"):
+            img.draw_rectangle((0, 0), (5, 5), (255, 255, 255), 1)
+
+    def test_non_positive_thickness_raises_clear_error(self) -> None:
+        img = Img()
+        img.img = np.zeros((20, 20, 3), dtype=np.uint8)
+        with self.assertRaisesRegex(ValueError, "thickness"):
+            img.draw_rectangle((0, 0), (5, 5), (255, 255, 255), 0)
+
+    def test_degenerate_rectangle_coordinates_raise_clear_error(self) -> None:
+        img = Img()
+        img.img = np.zeros((20, 20, 3), dtype=np.uint8)
+        with self.assertRaisesRegex(ValueError, "bottom_right"):
+            img.draw_rectangle((10, 10), (5, 5), (255, 255, 255), 1)
 
 
 if __name__ == "__main__":

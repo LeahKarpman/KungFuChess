@@ -3,9 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..model.game_state import GameSnapshot
+from ..model.position import Position
 from .img import Img
 from .layout import BoardLayout
 from .sprite_loader import SpriteLoader
+
+SELECTION_BORDER_COLOR = (0, 255, 255, 255)  # BGRA yellow, opaque: visible on light and dark cells
+SELECTION_BORDER_THICKNESS = 3
 
 
 class BoardRenderer:
@@ -39,8 +43,12 @@ class BoardRenderer:
             self._prepared_board = Img().read(self._board_image_path, size=pixel_size)
         return self._prepared_board
 
-    def render(self, snapshot: GameSnapshot) -> Img:
-        """Return a new Img with the board and every snapshot piece drawn on it."""
+    def render(self, snapshot: GameSnapshot, selected: Position | None = None) -> Img:
+        """Return a new Img with the board, every snapshot piece, and an optional selection border.
+
+        The selection border is drawn last so it stays visible on top of a piece
+        occupying the selected cell.
+        """
         if snapshot.width != self._expected_width or snapshot.height != self._expected_height:
             raise ValueError(
                 "Unsupported board dimensions for the supplied board image: "
@@ -56,4 +64,24 @@ class BoardRenderer:
             x, y = self._layout.centered_top_left(piece.cell, sprite_width, sprite_height)
             sprite.draw_on(canvas, x, y)
 
+        if selected is not None:
+            if not (0 <= selected.row < snapshot.height and 0 <= selected.col < snapshot.width):
+                raise ValueError(
+                    f"Selected position {selected} is outside the "
+                    f"{snapshot.width}x{snapshot.height} board."
+                )
+            self._draw_selection_border(canvas, selected)
+
         return canvas
+
+    def _draw_selection_border(self, canvas: Img, selected: Position) -> None:
+        """Draw a border around selected that stays fully inside the cell."""
+        left, top = self._layout.cell_top_left(selected)
+        right, bottom = left + self._layout.cell_size, top + self._layout.cell_size
+        inset = SELECTION_BORDER_THICKNESS
+        canvas.draw_rectangle(
+            (left + inset, top + inset),
+            (right - inset, bottom - inset),
+            SELECTION_BORDER_COLOR,
+            SELECTION_BORDER_THICKNESS,
+        )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pathlib
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -115,3 +116,44 @@ class Img:
     def close_all_windows() -> None:
         """Release every window opened by show() or show_frame()."""
         cv2.destroyAllWindows()
+
+    @staticmethod
+    def set_left_click_callback(
+        window_name: str, callback: Callable[[int, int], None]
+    ) -> None:
+        """Invoke callback(x, y) once for every left-button press inside window_name.
+
+        Creates the named window first if it does not exist yet, since OpenCV
+        requires a window to exist before a mouse callback can be attached to it.
+        All OpenCV mouse-event details (event codes, flags, userdata) stop here.
+        """
+        cv2.namedWindow(window_name)
+
+        def _on_mouse(event: int, x: int, y: int, flags: int, userdata: object) -> None:
+            if event == cv2.EVENT_LBUTTONDOWN:
+                callback(x, y)
+
+        cv2.setMouseCallback(window_name, _on_mouse)
+
+    def draw_rectangle(
+        self,
+        top_left: tuple[int, int],
+        bottom_right: tuple[int, int],
+        color: tuple[int, ...],
+        thickness: int,
+    ) -> None:
+        """Draw an unfilled rectangle border directly onto this image."""
+        if self.img is None:
+            raise ValueError("Image not loaded.")
+        if thickness <= 0:
+            raise ValueError(f"Rectangle thickness must be positive, got {thickness}.")
+
+        left, top = top_left
+        right, bottom = bottom_right
+        if right <= left or bottom <= top:
+            raise ValueError(
+                f"bottom_right {bottom_right} must be strictly greater than "
+                f"top_left {top_left} in both dimensions."
+            )
+
+        cv2.rectangle(self.img, top_left, bottom_right, color, thickness)
