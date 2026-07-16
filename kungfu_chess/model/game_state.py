@@ -32,6 +32,16 @@ class MotionSnapshot:
 
 
 @dataclass(frozen=True)
+class RestSnapshot:
+    """Describe one active cooldown for rendering and inspection."""
+
+    piece_id: str
+    rest_kind: Literal["short_rest", "long_rest"]
+    elapsed_ms: int
+    duration_ms: int
+
+
+@dataclass(frozen=True)
 class GameSnapshot:
     """Provide an immutable view of the complete observable game state."""
 
@@ -40,3 +50,4 @@ class GameSnapshot:
     game_over: bool
     width: int
     height: int
+    rests: tuple[RestSnapshot, ...] = ()

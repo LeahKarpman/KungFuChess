@@ -4,7 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from kungfu_chess.model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot
+from kungfu_chess.model.game_state import (
+    GameSnapshot,
+    MotionSnapshot,
+    PieceSnapshot,
+    RestSnapshot,
+)
 from kungfu_chess.model.position import Position
 from kungfu_chess.ui import game_window
 from kungfu_chess.ui.img import Img
@@ -18,10 +23,11 @@ BOARD_IMAGE_PATH = ASSETS_ROOT / "board.png"
 PIECES_ROOT = ASSETS_ROOT / "pieces2"
 
 
-def _snapshot(pieces, motions=(), width: int = 8, height: int = 8) -> GameSnapshot:
+def _snapshot(pieces, motions=(), rests=(), width: int = 8, height: int = 8) -> GameSnapshot:
     return GameSnapshot(
         pieces=tuple(pieces),
         motions=tuple(motions),
+        rests=tuple(rests),
         game_over=False,
         width=width,
         height=height,
@@ -378,6 +384,187 @@ class TestBoardRendererMotion(unittest.TestCase):
         baseline_frame = self.renderer.render(_snapshot([]))
 
         self.assertTrue((second_frame.img[600, 50] == baseline_frame.img[600, 50]).all())
+
+
+class TestBoardRendererRest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = BoardLayout(cell_size=100)
+        self.sprite_loader = SpriteLoader(PIECES_ROOT)
+        self.renderer = BoardRenderer(BOARD_IMAGE_PATH, self.sprite_loader, self.layout)
+
+    def test_idle_piece_uses_idle_sprite(self) -> None:
+        piece = PieceSnapshot(id="wK_0_0", color="w", kind="K", cell=Position(0, 0), state="idle")
+
+        with patch.object(
+            self.sprite_loader, "load_idle_sprite", wraps=self.sprite_loader.load_idle_sprite
+        ) as spy:
+            self.renderer.render(_snapshot([piece]))
+
+        spy.assert_called_once_with("K", "w")
+
+    def test_short_rest_piece_uses_short_rest_animation_state(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="short_rest")
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="short_rest", elapsed_ms=100, duration_ms=2000)
+
+        with patch.object(
+            self.sprite_loader, "get_animation_frame", wraps=self.sprite_loader.get_animation_frame
+        ) as spy:
+            self.renderer.render(_snapshot([piece], rests=[rest]))
+
+        spy.assert_called_once_with("P", "w", "short_rest", 100)
+
+    def test_long_rest_piece_uses_long_rest_animation_state(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest")
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=300, duration_ms=10000)
+
+        with patch.object(
+            self.sprite_loader, "get_animation_frame", wraps=self.sprite_loader.get_animation_frame
+        ) as spy:
+            self.renderer.render(_snapshot([piece], rests=[rest]))
+
+        spy.assert_called_once_with("P", "w", "long_rest", 300)
+
+    def test_resting_piece_remains_centered_in_its_cell(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest")
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+
+        frame = self.renderer.render(_snapshot([piece], rests=[rest]))
+        baseline = self.renderer.render(_snapshot([]))
+
+        self.assertFalse((frame.img[650, 50] == baseline.img[650, 50]).all())
+        far_cell = frame.img[50, 750]
+        empty_far_cell = baseline.img[50, 750]
+        self.assertTrue((far_cell == empty_far_cell).all())
+
+    def test_resting_piece_not_also_rendered_with_idle_sprite(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest")
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+
+        with patch.object(
+            self.sprite_loader, "load_idle_sprite", wraps=self.sprite_loader.load_idle_sprite
+        ) as idle_spy:
+            self.renderer.render(_snapshot([piece], rests=[rest]))
+
+        idle_spy.assert_not_called()
+
+    def test_rest_frame_selection_uses_rest_elapsed_ms(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest")
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=750, duration_ms=10000)
+
+        with patch.object(
+            self.sprite_loader, "get_animation_frame", wraps=self.sprite_loader.get_animation_frame
+        ) as spy:
+            self.renderer.render(_snapshot([piece], rests=[rest]))
+
+        spy.assert_called_once_with("P", "w", "long_rest", 750)
+
+    def test_rest_config_and_images_are_cached_across_frames(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest")
+
+        with patch.object(img_cv2, "imread", wraps=img_cv2.imread) as mocked_imread:
+            for elapsed_ms in (0, 10, 20):
+                rest = RestSnapshot(
+                    piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=elapsed_ms, duration_ms=10000
+                )
+                self.renderer.render(_snapshot([piece], rests=[rest]))
+
+        frame_reads = [
+            call
+            for call in mocked_imread.call_args_list
+            if "long_rest" in call.args[0] and "1.png" in call.args[0]
+        ]
+        self.assertEqual(len(frame_reads), 1)
+
+    def test_moving_resting_and_idle_pieces_render_together(self) -> None:
+        idle_piece = PieceSnapshot(id="wK_0_0", color="w", kind="K", cell=Position(0, 0), state="idle")
+        resting_piece = PieceSnapshot(
+            id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest"
+        )
+        moving_piece = PieceSnapshot(
+            id="bP_1_7", color="b", kind="P", cell=Position(1, 7), state="moving"
+        )
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+        motion = MotionSnapshot(
+            piece_id="bP_1_7",
+            source=Position(1, 7),
+            destination=Position(2, 7),
+            elapsed_ms=500,
+            duration_ms=1000,
+            action_kind="move",
+        )
+
+        frame = self.renderer.render(
+            _snapshot([idle_piece, resting_piece, moving_piece], motions=[motion], rests=[rest])
+        )
+        baseline = self.renderer.render(_snapshot([]))
+
+        self.assertFalse((frame.img[50, 50] == baseline.img[50, 50]).all())  # idle king
+        self.assertFalse((frame.img[650, 50] == baseline.img[650, 50]).all())  # resting pawn
+        self.assertFalse((frame.img[200, 750] == baseline.img[200, 750]).all())  # moving pawn midpoint
+
+    def test_selection_border_visible_above_resting_piece(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest")
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+
+        frame_without_selection = self.renderer.render(_snapshot([piece], rests=[rest]))
+        frame_with_selection = self.renderer.render(
+            _snapshot([piece], rests=[rest]), selected=Position(6, 0)
+        )
+
+        self.assertFalse(
+            (frame_without_selection.img[603, 50] == frame_with_selection.img[603, 50]).all()
+        )
+
+    def test_unknown_piece_id_in_rest_raises_clear_error(self) -> None:
+        rest = RestSnapshot(piece_id="ghost", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+
+        with self.assertRaisesRegex(ValueError, "unknown piece_id"):
+            self.renderer.render(_snapshot([], rests=[rest]))
+
+    def test_duplicate_rest_for_same_piece_raises_clear_error(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest")
+        rest_a = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+        rest_b = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=50, duration_ms=10000)
+
+        with self.assertRaisesRegex(ValueError, "Duplicate rest"):
+            self.renderer.render(_snapshot([piece], rests=[rest_a, rest_b]))
+
+    def test_piece_with_both_motion_and_rest_raises_clear_error(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=0,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+
+        with self.assertRaisesRegex(ValueError, "both an active motion and an active rest"):
+            self.renderer.render(_snapshot([piece], motions=[motion], rests=[rest]))
+
+    def test_promoted_piece_uses_promoted_kinds_long_rest_asset(self) -> None:
+        """A promoted pawn's rest sprite must be looked up by its new kind, not 'P'."""
+        piece = PieceSnapshot(id="wP_1_0", color="w", kind="Q", cell=Position(0, 0), state="long_rest")
+        rest = RestSnapshot(piece_id="wP_1_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+
+        with patch.object(
+            self.sprite_loader, "get_animation_frame", wraps=self.sprite_loader.get_animation_frame
+        ) as spy:
+            self.renderer.render(_snapshot([piece], rests=[rest]))
+
+        spy.assert_called_once_with("Q", "w", "long_rest", 0)
+
+    def test_render_does_not_mutate_snapshot_with_active_rest(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest")
+        rest = RestSnapshot(piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000)
+        snapshot = _snapshot([piece], rests=[rest])
+
+        self.renderer.render(snapshot)
+
+        self.assertEqual(snapshot.pieces, (piece,))
+        self.assertEqual(snapshot.rests, (rest,))
 
 
 if __name__ == "__main__":

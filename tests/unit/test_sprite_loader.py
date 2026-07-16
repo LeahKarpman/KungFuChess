@@ -211,6 +211,27 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             loader.get_animation_frame("P", "w", "move", 0)
 
+    def test_short_rest_state_loops_past_its_final_frame(self) -> None:
+        self._write_state("PW", "short_rest", [1, 2], frames_per_sec=1, is_loop=True)
+        loader = SpriteLoader(self.root)
+
+        # 2 frames at 1fps: elapsed_ms=0 -> frame 0; elapsed_ms=2000 wraps back to frame 0.
+        first = loader.get_animation_frame("P", "w", "short_rest", 0)
+        wrapped = loader.get_animation_frame("P", "w", "short_rest", 2000)
+
+        self.assertIs(first, wrapped)
+
+    def test_long_rest_state_holds_its_final_frame_when_non_looping(self) -> None:
+        self._write_state("PW", "long_rest", [1, 2], frames_per_sec=1, is_loop=False)
+        loader = SpriteLoader(self.root)
+
+        # 2 frames at 1fps: both elapsed_ms=1000 (last frame) and a far later
+        # elapsed_ms clamp to the same final frame instead of raising or wrapping.
+        last_frame = loader.get_animation_frame("P", "w", "long_rest", 1000)
+        held_frame = loader.get_animation_frame("P", "w", "long_rest", 50000)
+
+        self.assertIs(last_frame, held_frame)
+
 
 if __name__ == "__main__":
     unittest.main()

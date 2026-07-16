@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
+from ..game_config import DEFAULT_LONG_COOLDOWN_MS, DEFAULT_SHORT_COOLDOWN_MS
 from ..model.piece import Piece
 from ..model.position import Position
 from .motion import (
@@ -13,6 +14,7 @@ from .motion import (
     Motion,
     travel_duration_ms,
 )
+from .rest import ActiveRest, Rest, RestKind
 
 
 def _completion_priority(action_kind: ActionKind) -> int:
@@ -29,17 +31,25 @@ class RealTimeArbiter:
     promotion, or game-over logic — those are GameEngine's job.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        short_cooldown_ms: int = DEFAULT_SHORT_COOLDOWN_MS,
+        long_cooldown_ms: int = DEFAULT_LONG_COOLDOWN_MS,
+    ) -> None:
         self._motions: Dict[str, Motion] = {}
+        self._rests: Dict[str, Rest] = {}
         self._next_sequence = 0
+        self._short_cooldown_ms = short_cooldown_ms
+        self._long_cooldown_ms = long_cooldown_ms
 
     def is_piece_busy(self, piece_id: str) -> bool:
-        """Return whether the piece already has any scheduled action."""
-        return piece_id in self._motions
+        """Return whether the piece already has a scheduled action or active rest."""
+        return piece_id in self._motions or piece_id in self._rests
 
     def cancel_action(self, piece_id: str) -> None:
-        """Stop a scheduled action without changing the piece lifecycle."""
+        """Stop a scheduled action or active rest without changing the piece lifecycle."""
         self._motions.pop(piece_id, None)
+        self._rests.pop(piece_id, None)
 
     def start_motion(
         self,
@@ -67,9 +77,11 @@ class RealTimeArbiter:
         )
 
     def advance_time(self, ms: int) -> List[ArrivalEvent]:
-        """Advance every action and return events in resolution order."""
+        """Advance every action and rest, returning arrival events in resolution order."""
         if ms <= 0:
             return []
+
+        self._advance_rests(ms)
 
         completed: List[Tuple[int, int, int, ArrivalEvent]] = []
 
@@ -90,6 +102,7 @@ class RealTimeArbiter:
                         source=motion.source,
                         destination=motion.destination,
                         action_kind=motion.action_kind,
+                        leftover_ms=ms - remaining_ms,
                     ),
                 )
             )
@@ -102,10 +115,60 @@ class RealTimeArbiter:
         completed.sort(key=lambda item: item[:3])
         return [event for _, _, _, event in completed]
 
+    def _advance_rests(self, ms: int) -> None:
+        """Advance every active cooldown, returning completed pieces to idle.
+
+        A rest never produces an event: unlike arrival, its completion has no
+        board effect, so the piece can return to idle without GameEngine
+        involvement.
+        """
+        for piece_id, rest in tuple(self._rests.items()):
+            rest.advance(ms)
+            if not rest.is_complete():
+                continue
+            if rest.piece.state == rest.rest_kind:
+                rest.piece.state = "idle"
+            del self._rests[piece_id]
+
+    def start_rest(self, piece: Piece, rest_kind: RestKind, elapsed_ms: int = 0) -> None:
+        """Begin cooldown for a piece that just completed an action.
+
+        elapsed_ms seeds the rest with simulated time left over from the same
+        wait() call that produced the arrival, so time is never lost crossing
+        the motion-to-rest boundary.
+        """
+        if self.is_piece_busy(piece.id):
+            raise ValueError("piece_busy")
+
+        duration_ms = (
+            self._long_cooldown_ms if rest_kind == "long_rest" else self._short_cooldown_ms
+        )
+        rest = Rest(piece=piece, rest_kind=rest_kind, duration_ms=duration_ms)
+        piece.state = rest_kind
+        rest.advance(elapsed_ms)
+
+        if rest.is_complete():
+            piece.state = "idle"
+            return
+
+        self._rests[piece.id] = rest
+
     def active_actions(self) -> Tuple[ActiveAction, ...]:
         """Return immutable views of every currently scheduled action."""
         return tuple(
             self._to_active_action(motion) for motion in self._motions.values()
+        )
+
+    def active_rests(self) -> Tuple[ActiveRest, ...]:
+        """Return immutable views of every currently active cooldown."""
+        return tuple(
+            ActiveRest(
+                piece_id=rest.piece.id,
+                rest_kind=rest.rest_kind,
+                duration_ms=rest.duration_ms,
+                elapsed_ms=rest.elapsed_ms,
+            )
+            for rest in self._rests.values()
         )
 
     def active_jump_at(self, landing: Position) -> Optional[ActiveAction]:

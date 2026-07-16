@@ -121,3 +121,53 @@ class TestController(unittest.TestCase):
 
         self.assertEqual(result.action, "ignored")
         mock_engine.jump.assert_not_called()
+
+
+class TestControllerCooldownSelection(unittest.TestCase):
+    """Verify that resting pieces follow the same selection rules as moving ones."""
+
+    def test_resting_piece_cannot_be_selected(self) -> None:
+        controller, engine = _setup(["wR . ."])
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(1000)  # wR now long_rest at (0, 1)
+
+        result = controller.click(150, 50)
+
+        self.assertEqual(result.action, "ignored")
+        self.assertIsNone(controller.selected)
+
+    def test_clicking_friendly_resting_piece_preserves_prior_selection(self) -> None:
+        controller, engine = _setup(["wR . wN"])
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(1000)  # wR now long_rest at (0, 1); wN stays idle at (0, 2)
+
+        select_result = controller.click(250, 50)
+        self.assertEqual(select_result.action, "selected")
+        self.assertEqual(controller.selected, Position(0, 2))
+
+        result = controller.click(150, 50)
+
+        self.assertEqual(result.action, "ignored")
+        self.assertEqual(controller.selected, Position(0, 2))
+
+    def test_enemy_resting_piece_remains_a_valid_destination(self) -> None:
+        controller, engine = _setup(["wR . . bR"])
+        engine.request_move(Position(0, 0), Position(0, 2))
+        engine.wait(2000)  # wR now long_rest at (0, 2)
+
+        controller.click(350, 50)  # select bR at (0, 3)
+        result = controller.click(250, 50)  # target the resting enemy at (0, 2)
+
+        self.assertEqual(result.action, "move_requested")
+        self.assertIsNone(controller.selected)
+
+    def test_selection_works_immediately_after_rest_completion(self) -> None:
+        controller, engine = _setup(["wR . ."])
+        engine.request_move(Position(0, 0), Position(0, 1))
+        engine.wait(1000)  # long_rest starts
+        engine.wait(10000)  # long_rest completes -> idle
+
+        result = controller.click(150, 50)
+
+        self.assertEqual(result.action, "selected")
+        self.assertEqual(controller.selected, Position(0, 1))

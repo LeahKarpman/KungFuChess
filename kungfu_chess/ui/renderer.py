@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot
+from ..model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot, RestSnapshot
 from ..model.position import Position
 from .animation import clamp_progress, lerp_point
 from .img import Img
@@ -48,9 +48,10 @@ class BoardRenderer:
     def render(self, snapshot: GameSnapshot, selected: Position | None = None) -> Img:
         """Return a new Img with the board, every snapshot piece, and an optional selection border.
 
-        Render order is: base board, stationary pieces, moving pieces, then the
-        selection border, so the border always stays visible on top and a moving
-        piece is never also drawn at its logical (source) cell.
+        Render order is: base board, stationary idle pieces, resting pieces,
+        moving pieces, then the selection border, so the border always stays
+        visible on top and a piece with an active motion or rest is never
+        also drawn idle.
         """
         if snapshot.width != self._expected_width or snapshot.height != self._expected_height:
             raise ValueError(
@@ -59,13 +60,18 @@ class BoardRenderer:
                 f"got {snapshot.width}x{snapshot.height}"
             )
 
-        motions_by_piece_id = self._index_motions(snapshot)
+        motions_by_piece_id, rests_by_piece_id = self._index_motions_and_rests(snapshot)
 
         canvas = self._get_prepared_board().copy()
 
         for piece in snapshot.pieces:
-            if piece.id not in motions_by_piece_id:
+            if piece.id not in motions_by_piece_id and piece.id not in rests_by_piece_id:
                 self._draw_stationary_piece(canvas, piece)
+
+        for piece in snapshot.pieces:
+            rest = rests_by_piece_id.get(piece.id)
+            if rest is not None:
+                self._draw_resting_piece(canvas, piece, rest)
 
         for piece in snapshot.pieces:
             motion = motions_by_piece_id.get(piece.id)
@@ -83,9 +89,12 @@ class BoardRenderer:
         return canvas
 
     @staticmethod
-    def _index_motions(snapshot: GameSnapshot) -> dict[str, MotionSnapshot]:
-        """Map each piece_id to its motion, validating references and uniqueness."""
+    def _index_motions_and_rests(
+        snapshot: GameSnapshot,
+    ) -> tuple[dict[str, MotionSnapshot], dict[str, RestSnapshot]]:
+        """Map each piece_id to its motion/rest, validating references and exclusivity."""
         piece_ids = {piece.id for piece in snapshot.pieces}
+
         motions_by_piece_id: dict[str, MotionSnapshot] = {}
         for motion in snapshot.motions:
             if motion.piece_id not in piece_ids:
@@ -97,10 +106,35 @@ class BoardRenderer:
                     f"Duplicate motion for piece_id: {motion.piece_id!r}"
                 )
             motions_by_piece_id[motion.piece_id] = motion
-        return motions_by_piece_id
+
+        rests_by_piece_id: dict[str, RestSnapshot] = {}
+        for rest in snapshot.rests:
+            if rest.piece_id not in piece_ids:
+                raise ValueError(
+                    f"Rest references unknown piece_id: {rest.piece_id!r}"
+                )
+            if rest.piece_id in rests_by_piece_id:
+                raise ValueError(f"Duplicate rest for piece_id: {rest.piece_id!r}")
+            if rest.piece_id in motions_by_piece_id:
+                raise ValueError(
+                    f"piece_id {rest.piece_id!r} has both an active motion and an active rest"
+                )
+            rests_by_piece_id[rest.piece_id] = rest
+
+        return motions_by_piece_id, rests_by_piece_id
 
     def _draw_stationary_piece(self, canvas: Img, piece: PieceSnapshot) -> None:
         sprite = self._sprite_loader.load_idle_sprite(piece.kind, piece.color)
+        sprite_height, sprite_width = sprite.img.shape[:2]
+        x, y = self._layout.centered_top_left(piece.cell, sprite_width, sprite_height)
+        sprite.draw_on(canvas, x, y)
+
+    def _draw_resting_piece(
+        self, canvas: Img, piece: PieceSnapshot, rest: RestSnapshot
+    ) -> None:
+        sprite = self._sprite_loader.get_animation_frame(
+            piece.kind, piece.color, rest.rest_kind, rest.elapsed_ms
+        )
         sprite_height, sprite_width = sprite.img.shape[:2]
         x, y = self._layout.centered_top_left(piece.cell, sprite_width, sprite_height)
         sprite.draw_on(canvas, x, y)

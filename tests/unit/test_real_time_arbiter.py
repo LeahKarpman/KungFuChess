@@ -256,3 +256,147 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.arbiter.advance_time(1000)
 
         self.assertEqual(self.piece.state, "captured")
+
+    def test_advance_time_reports_leftover_time_past_arrival(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        events = self.arbiter.advance_time(1500)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].leftover_ms, 500)
+
+    def test_advance_time_reports_zero_leftover_at_exact_arrival(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        events = self.arbiter.advance_time(1000)
+
+        self.assertEqual(events[0].leftover_ms, 0)
+
+
+class TestRealTimeArbiterCooldown(unittest.TestCase):
+    """Verify per-piece rest scheduling, busy semantics, and time carry-over."""
+
+    def setUp(self) -> None:
+        self.arbiter = RealTimeArbiter(short_cooldown_ms=2000, long_cooldown_ms=10000)
+        self.piece = Piece("wP_1_0", "w", "P", Position(1, 0))
+
+    def test_default_cooldown_durations_are_2000_and_10000(self) -> None:
+        arbiter = RealTimeArbiter()
+        arbiter.start_rest(self.piece, "short_rest")
+        self.assertEqual(arbiter.active_rests()[0].duration_ms, 2000)
+
+        other = Piece("wQ_0_0", "w", "Q", Position(0, 0))
+        arbiter.start_rest(other, "long_rest")
+        rests_by_id = {rest.piece_id: rest for rest in arbiter.active_rests()}
+        self.assertEqual(rests_by_id["wQ_0_0"].duration_ms, 10000)
+
+    def test_start_rest_marks_piece_busy_and_sets_state(self) -> None:
+        self.arbiter.start_rest(self.piece, "long_rest")
+
+        self.assertTrue(self.arbiter.is_piece_busy(self.piece.id))
+        self.assertEqual(self.piece.state, "long_rest")
+
+    def test_long_rest_completes_exactly_after_10000ms(self) -> None:
+        self.arbiter.start_rest(self.piece, "long_rest")
+
+        self.arbiter.advance_time(9999)
+        self.assertEqual(self.piece.state, "long_rest")
+        self.assertTrue(self.arbiter.is_piece_busy(self.piece.id))
+
+        self.arbiter.advance_time(1)
+        self.assertEqual(self.piece.state, "idle")
+        self.assertFalse(self.arbiter.is_piece_busy(self.piece.id))
+
+    def test_short_rest_completes_exactly_after_2000ms(self) -> None:
+        self.arbiter.start_rest(self.piece, "short_rest")
+
+        self.arbiter.advance_time(1999)
+        self.assertEqual(self.piece.state, "short_rest")
+
+        self.arbiter.advance_time(1)
+        self.assertEqual(self.piece.state, "idle")
+
+    def test_partial_rest_remains_active(self) -> None:
+        self.arbiter.start_rest(self.piece, "long_rest")
+
+        self.arbiter.advance_time(4000)
+
+        active = self.arbiter.active_rests()
+        self.assertEqual(len(active), 1)
+        self.assertEqual(active[0].elapsed_ms, 4000)
+        self.assertEqual(active[0].duration_ms, 10000)
+
+    def test_excessive_wait_returns_piece_to_idle(self) -> None:
+        self.arbiter.start_rest(self.piece, "short_rest")
+
+        self.arbiter.advance_time(50000)
+
+        self.assertEqual(self.piece.state, "idle")
+        self.assertEqual(self.arbiter.active_rests(), ())
+
+    def test_start_rest_with_zero_elapsed_begins_at_zero(self) -> None:
+        self.arbiter.start_rest(self.piece, "long_rest", elapsed_ms=0)
+
+        active = self.arbiter.active_rests()
+        self.assertEqual(active[0].elapsed_ms, 0)
+        self.assertEqual(self.piece.state, "long_rest")
+
+    def test_start_rest_with_leftover_applies_remaining_time(self) -> None:
+        self.arbiter.start_rest(self.piece, "long_rest", elapsed_ms=4000)
+
+        active = self.arbiter.active_rests()
+        self.assertEqual(active[0].elapsed_ms, 4000)
+        self.assertEqual(self.piece.state, "long_rest")
+
+    def test_start_rest_with_leftover_crossing_full_cooldown_ends_idle(self) -> None:
+        self.arbiter.start_rest(self.piece, "long_rest", elapsed_ms=10000)
+
+        self.assertEqual(self.piece.state, "idle")
+        self.assertEqual(self.arbiter.active_rests(), ())
+
+    def test_cancel_action_removes_active_rest(self) -> None:
+        self.arbiter.start_rest(self.piece, "long_rest")
+
+        self.arbiter.cancel_action(self.piece.id)
+
+        self.assertFalse(self.arbiter.is_piece_busy(self.piece.id))
+        self.assertEqual(self.arbiter.active_rests(), ())
+
+    def test_cancelled_rest_does_not_resurface_later(self) -> None:
+        self.arbiter.start_rest(self.piece, "long_rest")
+        self.piece.state = "captured"
+
+        self.arbiter.cancel_action(self.piece.id)
+        self.arbiter.advance_time(50000)
+
+        self.assertEqual(self.piece.state, "captured")
+
+    def test_start_rest_rejects_already_busy_piece(self) -> None:
+        self.arbiter.start_motion(self.piece, Position(1, 0), Position(1, 1))
+
+        with self.assertRaisesRegex(ValueError, "^piece_busy$"):
+            self.arbiter.start_rest(self.piece, "long_rest")
+
+    def test_two_pieces_rest_concurrently_with_independent_elapsed_time(self) -> None:
+        other = Piece("bP_6_0", "b", "P", Position(6, 0))
+        self.arbiter.start_rest(self.piece, "long_rest")
+        self.arbiter.start_rest(other, "short_rest")
+
+        self.arbiter.advance_time(2000)
+
+        self.assertEqual(other.state, "idle")
+        self.assertEqual(self.piece.state, "long_rest")
+        remaining = self.arbiter.active_rests()
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(remaining[0].piece_id, self.piece.id)
+
+    def test_one_piece_rests_while_another_moves(self) -> None:
+        mover = Piece("bR_2_0", "b", "R", Position(2, 0))
+        self.arbiter.start_rest(self.piece, "short_rest")
+        self.arbiter.start_motion(mover, Position(2, 0), Position(2, 1))
+
+        events = self.arbiter.advance_time(2000)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(self.piece.state, "idle")
+        self.assertFalse(self.arbiter.is_piece_busy(mover.id))

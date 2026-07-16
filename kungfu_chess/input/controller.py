@@ -5,6 +5,7 @@ from typing import Literal
 
 from ..engine.game_engine import GameEngine
 from .board_mapper import BoardMapper
+from ..model.piece import RESTING_STATES
 from ..model.position import Position
 
 
@@ -61,7 +62,11 @@ class Controller:
         piece_at_pos = pieces_by_cell.get(pos)
 
         if self._selected is None:
-            if piece_at_pos is None or piece_at_pos.state == "moving":
+            if (
+                piece_at_pos is None
+                or piece_at_pos.state == "moving"
+                or piece_at_pos.state in RESTING_STATES
+            ):
                 return ControllerResult(action="ignored")
             self._selected = pos
             return ControllerResult(action="selected", position=pos)
@@ -70,11 +75,22 @@ class Controller:
         if (
             piece_at_pos is not None
             and piece_at_pos.state != "moving"
+            and piece_at_pos.state not in RESTING_STATES
             and selected_piece is not None
             and piece_at_pos.color == selected_piece.color
         ):
             self._selected = pos
             return ControllerResult(action="selected", position=pos)
+
+        if (
+            piece_at_pos is not None
+            and piece_at_pos.state in RESTING_STATES
+            and selected_piece is not None
+            and piece_at_pos.color == selected_piece.color
+        ):
+            # A friendly resting piece cannot become the new selection; leave
+            # the existing selection untouched instead of requesting a move.
+            return ControllerResult(action="ignored")
 
         src = self._selected
         self._selected = None

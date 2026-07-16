@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from ..model.board import Board
 from ..model.piece import Piece
 from ..model.position import Position
-from ..model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot
+from ..model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot, RestSnapshot
 from ..realtime.motion import ArrivalEvent
 from ..realtime.real_time_arbiter import RealTimeArbiter
+from ..realtime.rest import RestKind
 from ..rules.rule_engine import RuleEngine
 
 
@@ -90,6 +91,7 @@ class GameEngine:
         if not self._board.get_piece(event.destination):
             piece.cell = event.destination
             self._board.add_piece(piece)
+            self._start_rest_if_alive(piece, "short_rest", event.leftover_ms)
 
     def _apply_arrival(self, event: ArrivalEvent) -> None:
         piece = event.piece
@@ -109,6 +111,18 @@ class GameEngine:
         piece.cell = event.destination
         self._board.add_piece(piece)
         self._try_promote(piece)
+        self._start_rest_if_alive(piece, "long_rest", event.leftover_ms)
+
+    def _start_rest_if_alive(self, piece: Piece, rest_kind: RestKind, leftover_ms: int) -> None:
+        """Begin the piece's cooldown, unless it was captured or the game just ended.
+
+        Checked after capture and promotion resolve, so a piece removed from
+        the game during this same arrival never starts a cooldown, and a
+        capture that ends the game never grants the capturing piece a rest.
+        """
+        if piece.state == "captured" or self._game_over:
+            return
+        self._arbiter.start_rest(piece, rest_kind, elapsed_ms=leftover_ms)
 
     def _capture_piece(self, target: Piece, position: Position) -> None:
         """Apply the complete lifecycle transition for a captured piece."""
@@ -157,9 +171,19 @@ class GameEngine:
             )
             for action in active_actions
         )
+        rests = tuple(
+            RestSnapshot(
+                piece_id=rest.piece_id,
+                rest_kind=rest.rest_kind,
+                elapsed_ms=rest.elapsed_ms,
+                duration_ms=rest.duration_ms,
+            )
+            for rest in self._arbiter.active_rests()
+        )
         return GameSnapshot(
             pieces=tuple(pieces),
             motions=motions,
+            rests=rests,
             game_over=self._game_over,
             width=self._board.width,
             height=self._board.height,
