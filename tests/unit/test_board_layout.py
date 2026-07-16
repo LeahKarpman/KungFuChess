@@ -46,6 +46,26 @@ class TestBoardLayout(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "^invalid_cell_size$"):
                     BoardLayout(cell_size=cell_size)
 
+    def test_cell_center(self) -> None:
+        layout = BoardLayout(cell_size=100)
+        self.assertEqual(layout.cell_center(Position(0, 0)), (50.0, 50.0))
+        self.assertEqual(layout.cell_center(Position(1, 2)), (250.0, 150.0))
+
+    def test_cell_center_with_non_zero_origin(self) -> None:
+        layout = BoardLayout(cell_size=100, origin_x=10, origin_y=20)
+        self.assertEqual(layout.cell_center(Position(0, 0)), (60.0, 70.0))
+
+    def test_centered_top_left_at_point_matches_integer_cell_case(self) -> None:
+        layout = BoardLayout(cell_size=100)
+        self.assertEqual(
+            layout.centered_top_left_at_point((50.0, 50.0), 64, 64),
+            layout.centered_top_left(Position(0, 0), 64, 64),
+        )
+
+    def test_centered_top_left_at_point_rounds_final_coordinates(self) -> None:
+        layout = BoardLayout(cell_size=100)
+        self.assertEqual(layout.centered_top_left_at_point((50.2, 50.8), 64, 64), (18, 19))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -35,3 +35,19 @@ class BoardLayout:
         x = cell_x + (self.cell_size - content_width) // 2
         y = cell_y + (self.cell_size - content_height) // 2
         return (x, y)
+
+    def cell_center(self, position: Position) -> tuple[float, float]:
+        """Return the unrounded pixel (x, y) center of a logical cell."""
+        left, top = self.cell_top_left(position)
+        half = self.cell_size / 2
+        return (left + half, top + half)
+
+    def centered_top_left_at_point(
+        self, point: tuple[float, float], content_width: int, content_height: int
+    ) -> tuple[int, int]:
+        """Return the integer pixel (x, y) that centers content at an arbitrary point.
+
+        Rounding happens here only, at the final drawing-coordinate boundary.
+        """
+        x, y = point
+        return (round(x - content_width / 2), round(y - content_height / 2))
