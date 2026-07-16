@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from kungfu_chess.model.game_state import GameSnapshot, PieceSnapshot
 from kungfu_chess.model.position import Position
 from kungfu_chess.ui import game_window
+from kungfu_chess.ui.img import cv2 as img_cv2
 from kungfu_chess.ui.layout import BoardLayout
 from kungfu_chess.ui.renderer import BoardRenderer
 from kungfu_chess.ui.sprite_loader import SpriteLoader
@@ -73,6 +75,29 @@ class TestBoardRenderer(unittest.TestCase):
 
         self.assertEqual(snapshot.pieces, (piece,))
         self.assertEqual((snapshot.width, snapshot.height), (8, 8))
+
+    def test_board_asset_is_not_reloaded_for_every_frame(self) -> None:
+        with patch.object(img_cv2, "imread", wraps=img_cv2.imread) as mocked_imread:
+            self.renderer.render(_snapshot([]))
+            self.renderer.render(_snapshot([]))
+            self.renderer.render(_snapshot([]))
+
+        board_reads = [
+            call for call in mocked_imread.call_args_list if call.args[0] == str(BOARD_IMAGE_PATH)
+        ]
+        self.assertEqual(len(board_reads), 1)
+
+    def test_repeated_renders_do_not_accumulate_previous_pieces(self) -> None:
+        piece = PieceSnapshot(id="wK_0_0", color="w", kind="K", cell=Position(0, 0), state="idle")
+
+        self.renderer.render(_snapshot([piece]))
+        second_frame = self.renderer.render(_snapshot([]))
+        baseline_frame = self.renderer.render(_snapshot([]))
+
+        # The piece drawn in the first render must not leak into a later, empty frame.
+        self.assertTrue(
+            (second_frame.img[50, 50] == baseline_frame.img[50, 50]).all()
+        )
 
 
 if __name__ == "__main__":

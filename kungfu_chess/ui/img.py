@@ -92,3 +92,26 @@ class Img:
         cv2.imshow("Image", self.img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+
+    def copy(self) -> "Img":
+        """Return a new Img with an independent copy of the pixel data."""
+        duplicate = Img()
+        if self.img is not None:
+            duplicate.img = self.img.copy()
+        return duplicate
+
+    def show_frame(self, window_name: str = "Image") -> None:
+        """Display the current image without blocking and without closing the window."""
+        if self.img is None:
+            raise ValueError("Image not loaded.")
+        cv2.imshow(window_name, self.img)
+
+    @staticmethod
+    def poll_key(delay_ms: int) -> int:
+        """Process pending window events for delay_ms and return the pressed key code."""
+        return cv2.waitKey(delay_ms) & 0xFF
+
+    @staticmethod
+    def close_all_windows() -> None:
+        """Release every window opened by show() or show_frame()."""
+        cv2.destroyAllWindows()

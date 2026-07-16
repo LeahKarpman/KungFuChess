@@ -28,6 +28,16 @@ class BoardRenderer:
         self._layout = layout
         self._expected_width = expected_width
         self._expected_height = expected_height
+        self._prepared_board: Img | None = None
+
+    def _get_prepared_board(self) -> Img:
+        """Load and resize the board image once, then reuse it for every frame."""
+        if self._prepared_board is None:
+            pixel_size = self._layout.board_pixel_size(
+                self._expected_width, self._expected_height
+            )
+            self._prepared_board = Img().read(self._board_image_path, size=pixel_size)
+        return self._prepared_board
 
     def render(self, snapshot: GameSnapshot) -> Img:
         """Return a new Img with the board and every snapshot piece drawn on it."""
@@ -38,8 +48,7 @@ class BoardRenderer:
                 f"got {snapshot.width}x{snapshot.height}"
             )
 
-        pixel_size = self._layout.board_pixel_size(snapshot.width, snapshot.height)
-        canvas = Img().read(self._board_image_path, size=pixel_size)
+        canvas = self._get_prepared_board().copy()
 
         for piece in snapshot.pieces:
             sprite = self._sprite_loader.load_idle_sprite(piece.kind, piece.color)
