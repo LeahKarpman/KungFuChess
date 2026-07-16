@@ -89,3 +89,4 @@ class ArrivalEvent:
     source: Position
     destination: Position
     action_kind: ActionKind = "move"
+    leftover_ms: int = 0

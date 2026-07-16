@@ -7,8 +7,9 @@ if TYPE_CHECKING:
 
 VALID_COLORS = {"w", "b"}
 VALID_KINDS = {"K", "Q", "R", "B", "N", "P"}
-PieceState = Literal["idle", "moving", "captured"]
-VALID_STATES = {"idle", "moving", "captured"}
+PieceState = Literal["idle", "moving", "short_rest", "long_rest", "captured"]
+VALID_STATES = {"idle", "moving", "short_rest", "long_rest", "captured"}
+RESTING_STATES = {"short_rest", "long_rest"}
 
 
 class Piece:

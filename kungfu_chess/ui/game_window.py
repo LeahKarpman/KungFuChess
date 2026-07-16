@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..engine.game_engine import GameEngine
+from ..game_config import load_game_config
 from ..input.board_mapper import BoardMapper
 from ..input.controller import Controller
 from ..io.board_parser import parse_board
@@ -24,6 +25,7 @@ _UI_ROOT = Path(__file__).resolve().parent
 _PACKAGE_ROOT = _UI_ROOT.parent
 _ASSETS_ROOT = _UI_ROOT / "assets"
 _STANDARD_BOARD_PATH = _PACKAGE_ROOT / "resources" / "boards" / "standard_board.txt"
+_GAME_CONFIG_PATH = _PACKAGE_ROOT / "resources" / "game_config.json"
 
 
 def _build_standard_engine() -> GameEngine:
@@ -31,7 +33,12 @@ def _build_standard_engine() -> GameEngine:
     text = _STANDARD_BOARD_PATH.read_text(encoding="utf-8")
     lines = text.strip("\n").splitlines()
     board = parse_board(lines)
-    return GameEngine(board, RuleEngine(), RealTimeArbiter())
+    config = load_game_config(_GAME_CONFIG_PATH)
+    arbiter = RealTimeArbiter(
+        short_cooldown_ms=config.short_cooldown_ms,
+        long_cooldown_ms=config.long_cooldown_ms,
+    )
+    return GameEngine(board, RuleEngine(), arbiter)
 
 
 def _build_renderer() -> BoardRenderer:
