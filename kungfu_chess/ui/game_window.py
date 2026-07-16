@@ -78,6 +78,7 @@ def run_loop(
                 break
     finally:
         Img.close_all_windows()
+        # TODO : Consider adding a way to cleanly shut down the engine and renderer, if needed.
 
 
 def main() -> None:
