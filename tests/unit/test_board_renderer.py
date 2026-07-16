@@ -99,6 +99,49 @@ class TestBoardRenderer(unittest.TestCase):
             (second_frame.img[50, 50] == baseline_frame.img[50, 50]).all()
         )
 
+    def test_selected_none_draws_no_border(self) -> None:
+        implicit_frame = self.renderer.render(_snapshot([]))
+        explicit_none_frame = self.renderer.render(_snapshot([]), selected=None)
+
+        self.assertTrue((implicit_frame.img == explicit_none_frame.img).all())
+
+    def test_selected_position_draws_border_in_correct_cell(self) -> None:
+        baseline = self.renderer.render(_snapshot([]))
+        selected_frame = self.renderer.render(_snapshot([]), selected=Position(0, 0))
+
+        # A point along the top edge of cell (0, 0), just inside its border.
+        self.assertFalse((selected_frame.img[3, 50] == baseline.img[3, 50]).all())
+
+    def test_selection_in_one_cell_does_not_alter_another_cell(self) -> None:
+        baseline = self.renderer.render(_snapshot([]))
+        selected_frame = self.renderer.render(_snapshot([]), selected=Position(0, 0))
+
+        far_cell_pixel = selected_frame.img[750, 750]
+        baseline_far_cell_pixel = baseline.img[750, 750]
+        self.assertTrue((far_cell_pixel == baseline_far_cell_pixel).all())
+
+    def test_selection_border_visible_after_piece_rendering(self) -> None:
+        piece = PieceSnapshot(id="wK_0_0", color="w", kind="K", cell=Position(0, 0), state="idle")
+        frame_with_piece_only = self.renderer.render(_snapshot([piece]))
+        frame_with_piece_and_selection = self.renderer.render(
+            _snapshot([piece]), selected=Position(0, 0)
+        )
+
+        self.assertFalse(
+            (frame_with_piece_only.img[3, 50] == frame_with_piece_and_selection.img[3, 50]).all()
+        )
+
+    def test_render_does_not_mutate_selected_position(self) -> None:
+        selected = Position(0, 0)
+
+        self.renderer.render(_snapshot([]), selected=selected)
+
+        self.assertEqual(selected, Position(0, 0))
+
+    def test_out_of_board_selected_position_raises_clear_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "outside"):
+            self.renderer.render(_snapshot([]), selected=Position(8, 0))
+
 
 if __name__ == "__main__":
     unittest.main()

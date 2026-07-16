@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Callable
 
 from ..engine.game_engine import GameEngine
+from ..input.board_mapper import BoardMapper
+from ..input.controller import Controller
 from ..io.board_parser import parse_board
 from ..realtime.real_time_arbiter import RealTimeArbiter
 from ..rules.rule_engine import RuleEngine
@@ -41,6 +43,7 @@ def _build_renderer() -> BoardRenderer:
 def run_loop(
     engine: GameEngine,
     renderer: BoardRenderer,
+    controller: Controller,
     clock: Callable[[], float] = time.perf_counter,
     poll_key: Callable[[int], int] = Img.poll_key,
 ) -> None:
@@ -49,6 +52,8 @@ def run_loop(
     clock and poll_key are injectable so the loop can be exercised deterministically
     in tests; the real UI always calls this with their default implementations.
     """
+    Img.set_left_click_callback(WINDOW_TITLE, controller.click)
+
     last_time = clock()
     try:
         while True:
@@ -58,7 +63,7 @@ def run_loop(
 
             engine.wait(elapsed_ms)
             snapshot = engine.snapshot()
-            frame = renderer.render(snapshot)
+            frame = renderer.render(snapshot, controller.selected)
             frame.show_frame(WINDOW_TITLE)
 
             key = poll_key(POLL_DELAY_MS)
@@ -72,4 +77,7 @@ def main() -> None:
     """Run the persistent real-time window until the user closes it."""
     engine = _build_standard_engine()
     renderer = _build_renderer()
-    run_loop(engine, renderer)
+    snapshot = engine.snapshot()
+    mapper = BoardMapper(snapshot.width, snapshot.height, cell_size=CELL_SIZE)
+    controller = Controller(mapper, engine)
+    run_loop(engine, renderer, controller)
