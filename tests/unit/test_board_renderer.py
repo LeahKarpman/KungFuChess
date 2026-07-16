@@ -4,9 +4,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from kungfu_chess.model.game_state import GameSnapshot, PieceSnapshot
+from kungfu_chess.model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot
 from kungfu_chess.model.position import Position
 from kungfu_chess.ui import game_window
+from kungfu_chess.ui.img import Img
 from kungfu_chess.ui.img import cv2 as img_cv2
 from kungfu_chess.ui.layout import BoardLayout
 from kungfu_chess.ui.renderer import BoardRenderer
@@ -17,9 +18,13 @@ BOARD_IMAGE_PATH = ASSETS_ROOT / "board.png"
 PIECES_ROOT = ASSETS_ROOT / "pieces2"
 
 
-def _snapshot(pieces, width: int = 8, height: int = 8) -> GameSnapshot:
+def _snapshot(pieces, motions=(), width: int = 8, height: int = 8) -> GameSnapshot:
     return GameSnapshot(
-        pieces=tuple(pieces), motions=(), game_over=False, width=width, height=height
+        pieces=tuple(pieces),
+        motions=tuple(motions),
+        game_over=False,
+        width=width,
+        height=height,
     )
 
 
@@ -141,6 +146,238 @@ class TestBoardRenderer(unittest.TestCase):
     def test_out_of_board_selected_position_raises_clear_error(self) -> None:
         with self.assertRaisesRegex(ValueError, "outside"):
             self.renderer.render(_snapshot([]), selected=Position(8, 0))
+
+
+class TestBoardRendererMotion(unittest.TestCase):
+    def setUp(self) -> None:
+        self.layout = BoardLayout(cell_size=100)
+        self.sprite_loader = SpriteLoader(PIECES_ROOT)
+        self.renderer = BoardRenderer(BOARD_IMAGE_PATH, self.sprite_loader, self.layout)
+
+    def test_moving_piece_not_drawn_at_source_cell(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=500,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        frame = self.renderer.render(_snapshot([piece], motions=[motion]))
+        baseline = self.renderer.render(_snapshot([]))
+
+        # Cell (6, 0) center pixel: the interpolated sprite has moved to the
+        # shared border with cell (5, 0) and no longer covers its own center.
+        self.assertTrue((frame.img[650, 50] == baseline.img[650, 50]).all())
+
+    def test_moving_piece_drawn_at_interpolated_position(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=500,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        frame = self.renderer.render(_snapshot([piece], motions=[motion]))
+        baseline = self.renderer.render(_snapshot([]))
+
+        # Halfway between row 6 (y=650) and row 5 (y=550) is y=600, at col 0 (x=50).
+        self.assertFalse((frame.img[600, 50] == baseline.img[600, 50]).all())
+
+    def test_move_motion_uses_move_animation_state(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=0,
+            duration_ms=1000,
+            action_kind="move",
+        )
+
+        with patch.object(
+            self.sprite_loader,
+            "get_animation_frame",
+            wraps=self.sprite_loader.get_animation_frame,
+        ) as spy:
+            self.renderer.render(_snapshot([piece], motions=[motion]))
+
+        spy.assert_called_once_with("P", "w", "move", 0)
+
+    def test_jump_motion_uses_jump_animation_state(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(6, 0),
+            elapsed_ms=0,
+            duration_ms=1000,
+            action_kind="jump",
+        )
+
+        with patch.object(
+            self.sprite_loader,
+            "get_animation_frame",
+            wraps=self.sprite_loader.get_animation_frame,
+        ) as spy:
+            self.renderer.render(_snapshot([piece], motions=[motion]))
+
+        spy.assert_called_once_with("P", "w", "jump", 0)
+
+    def test_simultaneous_motions_rendered_independently(self) -> None:
+        piece_a = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        piece_b = PieceSnapshot(id="bP_1_7", color="b", kind="P", cell=Position(1, 7), state="moving")
+        motion_a = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=500,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        motion_b = MotionSnapshot(
+            piece_id="bP_1_7",
+            source=Position(1, 7),
+            destination=Position(2, 7),
+            elapsed_ms=500,
+            duration_ms=1000,
+            action_kind="move",
+        )
+
+        frame = self.renderer.render(_snapshot([piece_a, piece_b], motions=[motion_a, motion_b]))
+        baseline = self.renderer.render(_snapshot([]))
+
+        self.assertFalse((frame.img[600, 50] == baseline.img[600, 50]).all())
+        self.assertFalse((frame.img[200, 750] == baseline.img[200, 750]).all())
+
+    def test_moving_pieces_drawn_after_stationary_pieces(self) -> None:
+        stationary = PieceSnapshot(id="wK_0_0", color="w", kind="K", cell=Position(0, 0), state="idle")
+        moving = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=500,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        draw_calls: list[tuple[int, int]] = []
+        original_draw_on = Img.draw_on
+
+        def _spy_draw_on(self, other_img, x, y):
+            draw_calls.append((x, y))
+            return original_draw_on(self, other_img, x, y)
+
+        with patch.object(Img, "draw_on", _spy_draw_on):
+            self.renderer.render(_snapshot([stationary, moving], motions=[motion]))
+
+        stationary_xy = self.layout.centered_top_left(Position(0, 0), 64, 64)
+        self.assertEqual(len(draw_calls), 2)
+        self.assertEqual(draw_calls[0], stationary_xy)
+        self.assertNotEqual(draw_calls[1], stationary_xy)
+
+    def test_selection_border_visible_above_moving_piece(self) -> None:
+        moving = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=0,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        frame_without_selection = self.renderer.render(_snapshot([moving], motions=[motion]))
+        frame_with_selection = self.renderer.render(
+            _snapshot([moving], motions=[motion]), selected=Position(6, 0)
+        )
+
+        # A point just inside the top edge of cell (6, 0), where the border is drawn.
+        self.assertFalse(
+            (frame_without_selection.img[603, 50] == frame_with_selection.img[603, 50]).all()
+        )
+
+    def test_unknown_piece_id_in_motion_raises_clear_error(self) -> None:
+        motion = MotionSnapshot(
+            piece_id="ghost",
+            source=Position(0, 0),
+            destination=Position(1, 0),
+            elapsed_ms=0,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        with self.assertRaisesRegex(ValueError, "unknown piece_id"):
+            self.renderer.render(_snapshot([], motions=[motion]))
+
+    def test_duplicate_motion_for_same_piece_raises_clear_error(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion_a = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=0,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        motion_b = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=100,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        with self.assertRaisesRegex(ValueError, "Duplicate motion"):
+            self.renderer.render(_snapshot([piece], motions=[motion_a, motion_b]))
+
+    def test_unsupported_action_kind_raises_clear_error(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=0,
+            duration_ms=1000,
+            action_kind="teleport",  # type: ignore[arg-type]
+        )
+        with self.assertRaisesRegex(ValueError, "Unsupported action kind"):
+            self.renderer.render(_snapshot([piece], motions=[motion]))
+
+    def test_render_does_not_mutate_snapshot_with_active_motion(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=300,
+            duration_ms=1000,
+            action_kind="move",
+        )
+        snapshot = _snapshot([piece], motions=[motion])
+
+        self.renderer.render(snapshot)
+
+        self.assertEqual(snapshot.pieces, (piece,))
+        self.assertEqual(snapshot.motions, (motion,))
+
+    def test_repeated_renders_do_not_accumulate_previous_motion_drawings(self) -> None:
+        piece = PieceSnapshot(id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving")
+        motion = MotionSnapshot(
+            piece_id="wP_6_0",
+            source=Position(6, 0),
+            destination=Position(5, 0),
+            elapsed_ms=500,
+            duration_ms=1000,
+            action_kind="move",
+        )
+
+        self.renderer.render(_snapshot([piece], motions=[motion]))
+        second_frame = self.renderer.render(_snapshot([]))
+        baseline_frame = self.renderer.render(_snapshot([]))
+
+        self.assertTrue((second_frame.img[600, 50] == baseline_frame.img[600, 50]).all())
 
 
 if __name__ == "__main__":
