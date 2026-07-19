@@ -272,6 +272,49 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         self.assertEqual(events[0].leftover_ms, 0)
 
+    def test_cooldown_ms_properties_expose_configured_durations(self) -> None:
+        arbiter = RealTimeArbiter(short_cooldown_ms=1500, long_cooldown_ms=9000)
+
+        self.assertEqual(arbiter.short_cooldown_ms, 1500)
+        self.assertEqual(arbiter.long_cooldown_ms, 9000)
+
+    def test_consume_completed_rest_piece_ids_reports_and_clears(self) -> None:
+        self.arbiter.start_rest(self.piece, "short_rest")
+
+        self.assertEqual(self.arbiter.consume_completed_rest_piece_ids(), ())
+
+        self.arbiter.advance_time(2000)
+
+        self.assertEqual(self.arbiter.consume_completed_rest_piece_ids(), (self.piece.id,))
+        self.assertEqual(self.arbiter.consume_completed_rest_piece_ids(), ())
+
+    def test_next_boundary_ms_is_none_when_nothing_scheduled(self) -> None:
+        self.assertIsNone(self.arbiter.next_boundary_ms())
+
+    def test_next_boundary_ms_reports_nearest_motion(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        self.assertEqual(self.arbiter.next_boundary_ms(), 1000)
+
+        self.arbiter.advance_time(400)
+
+        self.assertEqual(self.arbiter.next_boundary_ms(), 600)
+
+    def test_next_boundary_ms_is_minimum_across_motions_and_rests(self) -> None:
+        self.arbiter.start_rest(self.piece, "short_rest")  # 2000ms remaining
+
+        second_source = Position(2, 0)
+        second_piece = Piece("bR_2_0", "b", "R", second_source)
+        self.arbiter.start_motion(second_piece, second_source, Position(2, 1))  # 1000ms remaining
+
+        self.assertEqual(self.arbiter.next_boundary_ms(), 1000)
+
+    def test_next_boundary_ms_ignores_cancelled_actions(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+        self.arbiter.cancel_action(self.piece.id)
+
+        self.assertIsNone(self.arbiter.next_boundary_ms())
+
 
 class TestRealTimeArbiterCooldown(unittest.TestCase):
     """Verify per-piece rest scheduling, busy semantics, and time carry-over."""

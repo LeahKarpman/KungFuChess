@@ -146,6 +146,7 @@ class TestGameEngine(unittest.TestCase):
     def test_wait_delegates_to_arbiter(self) -> None:
         mock_arbiter = MagicMock(spec=RealTimeArbiter)
         mock_arbiter.advance_time.return_value = []
+        mock_arbiter.next_boundary_ms.return_value = None
         board = parse_board([". wR ."])
         engine = GameEngine(
             board,
