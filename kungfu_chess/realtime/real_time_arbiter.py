@@ -41,6 +41,17 @@ class RealTimeArbiter:
         self._next_sequence = 0
         self._short_cooldown_ms = short_cooldown_ms
         self._long_cooldown_ms = long_cooldown_ms
+        self._completed_rest_piece_ids: List[str] = []
+
+    @property
+    def short_cooldown_ms(self) -> int:
+        """Return the configured short_rest cooldown duration."""
+        return self._short_cooldown_ms
+
+    @property
+    def long_cooldown_ms(self) -> int:
+        """Return the configured long_rest cooldown duration."""
+        return self._long_cooldown_ms
 
     def is_piece_busy(self, piece_id: str) -> bool:
         """Return whether the piece already has a scheduled action or active rest."""
@@ -75,6 +86,19 @@ class RealTimeArbiter:
             destination=landing,
             duration_ms=MS_PER_CELL,
         )
+
+    def next_boundary_ms(self) -> Optional[int]:
+        """Return the simulated time until the nearest motion or rest completion.
+
+        Returns None when nothing is scheduled. GameEngine advances time in
+        steps of at most this size so that an arrival's side effects (a
+        capture cancelling a rest, a new rest starting) are always resolved
+        before a completion that happens later in simulated time, never
+        after it.
+        """
+        remaining = [motion.remaining_ms() for motion in self._motions.values()]
+        remaining.extend(rest.remaining_ms() for rest in self._rests.values())
+        return min(remaining) if remaining else None
 
     def advance_time(self, ms: int) -> List[ArrivalEvent]:
         """Advance every action and rest, returning arrival events in resolution order."""
@@ -118,9 +142,9 @@ class RealTimeArbiter:
     def _advance_rests(self, ms: int) -> None:
         """Advance every active cooldown, returning completed pieces to idle.
 
-        A rest never produces an event: unlike arrival, its completion has no
-        board effect, so the piece can return to idle without GameEngine
-        involvement.
+        A rest completing here has no board effect (unlike arrival), so the
+        piece returns to idle directly; the piece_id is recorded so
+        GameEngine can still report a RestCompleted event for it.
         """
         for piece_id, rest in tuple(self._rests.items()):
             rest.advance(ms)
@@ -129,6 +153,13 @@ class RealTimeArbiter:
             if rest.piece.state == rest.rest_kind:
                 rest.piece.state = "idle"
             del self._rests[piece_id]
+            self._completed_rest_piece_ids.append(piece_id)
+
+    def consume_completed_rest_piece_ids(self) -> Tuple[str, ...]:
+        """Return and clear piece_ids whose rest finished during the last advance_time call."""
+        piece_ids = tuple(self._completed_rest_piece_ids)
+        self._completed_rest_piece_ids.clear()
+        return piece_ids
 
     def start_rest(self, piece: Piece, rest_kind: RestKind, elapsed_ms: int = 0) -> None:
         """Begin cooldown for a piece that just completed an action.

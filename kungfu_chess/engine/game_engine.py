@@ -5,6 +5,18 @@ from dataclasses import dataclass
 from ..model.board import Board
 from ..model.piece import Piece
 from ..model.position import Position
+from ..model.events import (
+    GameEvent,
+    GameOver,
+    JumpCompleted,
+    JumpStarted,
+    MoveCompleted,
+    MoveStarted,
+    PieceCaptured,
+    PiecePromoted,
+    RestCompleted,
+    RestStarted,
+)
 from ..model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot, RestSnapshot
 from ..realtime.motion import ArrivalEvent
 from ..realtime.real_time_arbiter import RealTimeArbiter
@@ -33,11 +45,21 @@ class GameEngine:
         self._rules = rule_engine if rule_engine is not None else RuleEngine()
         self._arbiter = arbiter if arbiter is not None else RealTimeArbiter()
         self._game_over = False
+        self._events: list[GameEvent] = []
 
     @property
     def game_over(self) -> bool:
         """Return whether a king has been captured."""
         return self._game_over
+
+    def consume_events(self) -> tuple[GameEvent, ...]:
+        """Return every event produced since the last call, then clear the queue."""
+        events = tuple(self._events)
+        self._events.clear()
+        return events
+
+    def _emit(self, event: GameEvent) -> None:
+        self._events.append(event)
 
     def request_move(self, src: Position, dst: Position) -> MoveResult:
         """Validate and schedule a move without mutating settled board cells."""
@@ -59,6 +81,7 @@ class GameEngine:
 
         assert piece is not None
         self._arbiter.start_motion(piece, src, dst)
+        self._emit(MoveStarted(piece_id=piece.id, source=src, destination=dst))
         return MoveResult(ok=True, reason="ok")
 
     def jump(self, pos: Position) -> None:
@@ -72,28 +95,74 @@ class GameEngine:
 
         self._arbiter.start_jump(piece, pos)
         self._board.remove_piece(pos)
+        self._emit(JumpStarted(piece_id=piece.id, source=pos, destination=pos))
 
     def wait(self, ms: int) -> None:
-        """Advance simulated time and apply every completed action."""
-        for event in self._arbiter.advance_time(ms):
+        """Advance simulated time in chronological steps, one boundary at a time.
+
+        A single call may span several completions: an already-active rest,
+        an arrival, another rest that arrival just started. Stepping only up
+        to the nearest boundary each time guarantees an arrival's side
+        effects (a capture cancelling a rest, a new rest starting) are
+        applied before any later completion is resolved, never after — this
+        is what makes a capture cancel a resting piece's cooldown before it
+        ever completes, instead of racing it.
+
+        Tie rule for completions landing on the exact same simulated
+        millisecond: rest completion, then move arrival, then jump arrival,
+        then (within the same kind) start-of-action order.
+        """
+        remaining_ms = ms
+        while remaining_ms > 0:
+            boundary_ms = self._arbiter.next_boundary_ms()
+            step_ms = remaining_ms if boundary_ms is None else min(boundary_ms, remaining_ms)
+            self._advance_step(step_ms)
+            remaining_ms -= step_ms
+
+    def _advance_step(self, ms: int) -> None:
+        """Advance the arbiter by exactly one chronological step and apply results."""
+        arrival_events = self._arbiter.advance_time(ms)
+
+        for piece_id in self._arbiter.consume_completed_rest_piece_ids():
+            self._emit(RestCompleted(piece_id=piece_id))
+
+        for event in arrival_events:
             if event.action_kind == "jump":
                 self._apply_jump_arrival(event)
             else:
                 self._apply_arrival(event)
 
     def _apply_jump_arrival(self, event: ArrivalEvent) -> None:
+        if self._game_over:
+            return
+
         piece = event.piece
         target = self._board.get_piece(event.destination)
 
+        winner_color = None
         if target and target.color != piece.color:
-            self._capture_piece(target, event.destination)
+            winner_color = self._capture_piece(target, event.destination, piece)
 
         if not self._board.get_piece(event.destination):
             piece.cell = event.destination
             self._board.add_piece(piece)
+            self._emit(
+                JumpCompleted(
+                    piece_id=piece.id,
+                    piece_kind=piece.kind,
+                    piece_color=piece.color,
+                    source=event.source,
+                    destination=event.destination,
+                )
+            )
+            if winner_color is not None:
+                self._emit(GameOver(winner_color=winner_color))
             self._start_rest_if_alive(piece, "short_rest", event.leftover_ms)
 
     def _apply_arrival(self, event: ArrivalEvent) -> None:
+        if self._game_over:
+            return
+
         piece = event.piece
 
         if self._board.get_piece(event.source) is not piece:
@@ -105,12 +174,24 @@ class GameEngine:
 
         self._board.remove_piece(event.source)
 
+        winner_color = None
         if target:
-            self._capture_piece(target, event.destination)
+            winner_color = self._capture_piece(target, event.destination, piece)
 
         piece.cell = event.destination
         self._board.add_piece(piece)
+        self._emit(
+            MoveCompleted(
+                piece_id=piece.id,
+                piece_kind=piece.kind,
+                piece_color=piece.color,
+                source=event.source,
+                destination=event.destination,
+            )
+        )
         self._try_promote(piece)
+        if winner_color is not None:
+            self._emit(GameOver(winner_color=winner_color))
         self._start_rest_if_alive(piece, "long_rest", event.leftover_ms)
 
     def _start_rest_if_alive(self, piece: Piece, rest_kind: RestKind, leftover_ms: int) -> None:
@@ -122,15 +203,45 @@ class GameEngine:
         """
         if piece.state == "captured" or self._game_over:
             return
-        self._arbiter.start_rest(piece, rest_kind, elapsed_ms=leftover_ms)
 
-    def _capture_piece(self, target: Piece, position: Position) -> None:
-        """Apply the complete lifecycle transition for a captured piece."""
+        self._arbiter.start_rest(piece, rest_kind, elapsed_ms=leftover_ms)
+        duration_ms = (
+            self._arbiter.long_cooldown_ms
+            if rest_kind == "long_rest"
+            else self._arbiter.short_cooldown_ms
+        )
+        self._emit(RestStarted(piece_id=piece.id, rest_kind=rest_kind, duration_ms=duration_ms))
+        if piece.state == "idle":
+            # leftover_ms already covered the full cooldown within this same wait().
+            self._emit(RestCompleted(piece_id=piece.id))
+
+    def _capture_piece(
+        self, target: Piece, position: Position, capturing_piece: Piece
+    ) -> str | None:
+        """Apply the complete lifecycle transition for a captured piece.
+
+        Sets self._game_over immediately when the captured piece is a king,
+        so a second simultaneous king capture (guarded against at the top of
+        _apply_arrival/_apply_jump_arrival) never runs. Returns the winning
+        color instead of emitting GameOver itself, so the caller can place
+        the event after the completion event, per the approved order.
+        """
         target.state = "captured"
         self._arbiter.cancel_action(target.id)
         self._board.remove_piece(position)
+        self._emit(
+            PieceCaptured(
+                captured_piece_id=target.id,
+                captured_piece_kind=target.kind,
+                captured_piece_color=target.color,
+                by_piece_id=capturing_piece.id,
+                position=position,
+            )
+        )
         if target.kind == "K":
             self._game_over = True
+            return capturing_piece.color
+        return None
 
     def _try_promote(self, piece: Piece) -> None:
         if piece.kind != "P":
@@ -139,6 +250,7 @@ class GameEngine:
         promotion_row = 0 if piece.color == "w" else self._board.height - 1
         if piece.cell.row == promotion_row:
             piece.kind = "Q"
+            self._emit(PiecePromoted(piece_id=piece.id, new_kind="Q"))
 
     def snapshot(self) -> GameSnapshot:
         """Return an immutable representation of the current game state."""
