@@ -718,6 +718,65 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
             any(isinstance(event, RestStarted) for event in events[game_over_index:])
         )
 
+    def test_gameover_is_final_event_emitted(self) -> None:
+        engine, _ = _engine(["wR . bK"])
+        engine.request_move(Position(0, 0), Position(0, 2))
+
+        engine.wait(2000)
+        events = engine.consume_events()
+
+        self.assertIsInstance(events[-1], GameOver)
+
+    def test_exactly_one_gameover_event_for_simultaneous_king_captures(self) -> None:
+        engine, _ = _engine(["wK bR", "bK wR"])
+        engine.request_move(Position(1, 1), Position(1, 0))
+        engine.request_move(Position(0, 1), Position(0, 0))
+        engine.consume_events()
+
+        engine.wait(1000)
+        events = engine.consume_events()
+
+        self.assertEqual(sum(1 for e in events if isinstance(e, GameOver)), 1)
+
+
+class TestGameOverEventFreeze(unittest.TestCase):
+    """Verify that no public event of any kind is emitted once a wait()
+    call has already ended the game — including in a later, separate
+    wait() call that would otherwise complete an action left in flight.
+    """
+
+    def test_no_restcompleted_emitted_in_later_wait_after_game_over(self) -> None:
+        engine, _ = _engine(["wR . bK", "wR . ."])
+        engine.request_move(Position(1, 0), Position(1, 1))
+        engine.wait(1000)  # second rook arrives and starts a 10000ms long_rest
+        engine.consume_events()
+
+        engine.request_move(Position(0, 0), Position(0, 2))  # captures king in 2000ms
+        engine.wait(2000)
+        self.assertTrue(engine.game_over)
+        engine.consume_events()
+
+        engine.wait(20000)  # would finish wN's rest (8000ms left) if the bug were present
+        events = engine.consume_events()
+
+        self.assertEqual(events, ())
+        self.assertFalse(any(isinstance(e, RestCompleted) for e in events))
+
+    def test_no_movecompleted_emitted_in_later_wait_after_game_over(self) -> None:
+        engine, _ = _engine(["bK wR . . . wN", ". . . . . ."])
+        engine.request_move(Position(0, 5), Position(1, 3))  # knight, 3000ms
+        engine.request_move(Position(0, 1), Position(0, 0))  # rook captures king, 1000ms
+        engine.consume_events()
+
+        engine.wait(1000)
+        self.assertTrue(engine.game_over)
+        engine.consume_events()
+
+        engine.wait(10000)  # would finish the knight's move (2000ms left) if the bug were present
+        events = engine.consume_events()
+
+        self.assertEqual(events, ())
+
 
 class TestEventImmutability(unittest.TestCase):
     def test_events_are_immutable(self) -> None:

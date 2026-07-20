@@ -111,9 +111,18 @@ class GameEngine:
         Tie rule for completions landing on the exact same simulated
         millisecond: rest completion, then move arrival, then jump arrival,
         then (within the same kind) start-of-action order.
+
+        Game over is terminal: the instant it is set (by a king capture
+        inside a step this loop just took), stepping stops immediately and
+        any unused milliseconds from this call are discarded rather than
+        applied to another motion or rest. Checking at the top of the loop
+        also makes a wait() call issued after the game already ended a
+        complete no-op — it never advances the arbiter at all.
         """
         remaining_ms = ms
         while remaining_ms > 0:
+            if self._game_over:
+                break
             boundary_ms = self._arbiter.next_boundary_ms()
             step_ms = remaining_ms if boundary_ms is None else min(boundary_ms, remaining_ms)
             self._advance_step(step_ms)
@@ -137,6 +146,11 @@ class GameEngine:
             return
 
         piece = event.piece
+        # Finalize this motion now that we're committed to deciding its
+        # outcome — the game_over guard above is what skips this for a
+        # later arrival in the same batch, leaving it authoritative rather
+        # than orphaning the piece (see RealTimeArbiter.resolve_arrival).
+        self._arbiter.resolve_arrival(piece.id)
         target = self._board.get_piece(event.destination)
 
         winner_color = None
@@ -164,6 +178,8 @@ class GameEngine:
             return
 
         piece = event.piece
+        # See the matching comment in _apply_jump_arrival.
+        self._arbiter.resolve_arrival(piece.id)
 
         if self._board.get_piece(event.source) is not piece:
             return

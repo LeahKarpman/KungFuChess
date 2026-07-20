@@ -28,6 +28,16 @@ class Rest:
     duration_ms: int
     elapsed_ms: int = 0
 
+    def __post_init__(self) -> None:
+        if isinstance(self.duration_ms, bool) or not isinstance(self.duration_ms, int):
+            raise ValueError(
+                f"Rest duration_ms must be an int, got {self.duration_ms!r}"
+            )
+        if self.duration_ms <= 0:
+            raise ValueError(
+                f"Rest duration_ms must be positive, got {self.duration_ms!r}"
+            )
+
     def advance(self, ms: int) -> None:
         """Add simulated time to this rest's elapsed duration."""
         self.elapsed_ms += ms

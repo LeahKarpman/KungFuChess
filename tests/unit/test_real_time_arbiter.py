@@ -1,6 +1,8 @@
 import unittest
 
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
+from kungfu_chess.realtime.motion import Motion
+from kungfu_chess.realtime.rest import Rest
 from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 
@@ -36,6 +38,13 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].destination, self.dst)
+        # A completed motion stays authoritative (still busy) until the
+        # caller explicitly acknowledges it via resolve_arrival — see
+        # TestArrivalResolutionProtocol for the two-phase contract.
+        self.assertTrue(self.arbiter.is_piece_busy(self.piece.id))
+
+        self.arbiter.resolve_arrival(self.piece.id)
+
         self.assertFalse(self.arbiter.is_piece_busy(self.piece.id))
 
     def test_partial_then_remaining_wait(self) -> None:
@@ -147,6 +156,12 @@ class TestRealTimeArbiter(unittest.TestCase):
             [event.piece.id for event in events],
             ["wR_0_0", "bR_2_0"],
         )
+        # Still authoritative: neither completion has been resolved yet.
+        self.assertEqual(len(self.arbiter.active_actions()), 2)
+
+        self.arbiter.resolve_arrival(self.piece.id)
+        self.arbiter.resolve_arrival(second_piece.id)
+
         self.assertEqual(self.arbiter.active_actions(), ())
 
     def test_active_actions_are_immutable_copies(self) -> None:
@@ -201,6 +216,10 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].action_kind, "jump")
         self.assertEqual(events[0].destination, landing)
+        self.assertTrue(self.arbiter.is_piece_busy("wK_1_1"))
+
+        self.arbiter.resolve_arrival("wK_1_1")
+
         self.assertFalse(self.arbiter.is_piece_busy("wK_1_1"))
 
     def test_move_completion_precedes_jump_at_same_time(self) -> None:
@@ -236,6 +255,13 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         self.arbiter.advance_time(1)
 
+        # Completion is detected but not yet finalized: state must not
+        # flip until resolve_arrival runs, so an arrival GameEngine
+        # cannot yet apply never shows a piece as idle prematurely.
+        self.assertEqual(self.piece.state, "moving")
+
+        self.arbiter.resolve_arrival(self.piece.id)
+
         self.assertEqual(self.piece.state, "idle")
 
     def test_jump_updates_piece_lifecycle(self) -> None:
@@ -247,6 +273,10 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         self.arbiter.advance_time(1000)
 
+        self.assertEqual(jumper.state, "moving")
+
+        self.arbiter.resolve_arrival(jumper.id)
+
         self.assertEqual(jumper.state, "idle")
 
     def test_completion_does_not_revive_captured_piece(self) -> None:
@@ -254,6 +284,10 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.piece.state = "captured"
 
         self.arbiter.advance_time(1000)
+
+        self.assertEqual(self.piece.state, "captured")
+
+        self.arbiter.resolve_arrival(self.piece.id)
 
         self.assertEqual(self.piece.state, "captured")
 
@@ -442,4 +476,198 @@ class TestRealTimeArbiterCooldown(unittest.TestCase):
 
         self.assertEqual(len(events), 1)
         self.assertEqual(self.piece.state, "idle")
+        self.assertTrue(self.arbiter.is_piece_busy(mover.id))
+
+        self.arbiter.resolve_arrival(mover.id)
+
         self.assertFalse(self.arbiter.is_piece_busy(mover.id))
+
+
+class TestArrivalResolutionProtocol(unittest.TestCase):
+    """Verify the two-phase completion protocol: advance_time only detects
+    a completed motion; resolve_arrival is the sole step that finalizes it
+    (removes it from scheduling and returns its piece to idle). A caller
+    that never resolves a detected completion (because GameOver decided
+    the outcome first) leaves the motion authoritative instead of losing
+    track of its piece.
+    """
+
+    def setUp(self) -> None:
+        self.arbiter = RealTimeArbiter()
+        self.src = Position(0, 0)
+        self.dst = Position(0, 1)
+        self.piece = Piece("wR_0_0", "w", "R", self.src)
+
+    def test_completed_motion_stays_busy_until_resolved(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        self.arbiter.advance_time(1000)
+
+        self.assertTrue(self.arbiter.is_piece_busy(self.piece.id))
+
+    def test_completed_motion_stays_in_active_actions_until_resolved(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        self.arbiter.advance_time(1000)
+
+        actions = self.arbiter.active_actions()
+        self.assertEqual(len(actions), 1)
+        self.assertEqual(actions[0].piece_id, "wR_0_0")
+
+    def test_resolve_arrival_finalizes_motion_and_returns_piece_to_idle(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+        self.arbiter.advance_time(1000)
+
+        self.arbiter.resolve_arrival(self.piece.id)
+
+        self.assertFalse(self.arbiter.is_piece_busy(self.piece.id))
+        self.assertEqual(self.arbiter.active_actions(), ())
+        self.assertEqual(self.piece.state, "idle")
+
+    def test_resolve_arrival_is_noop_for_incomplete_motion(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+        self.arbiter.advance_time(500)
+
+        self.arbiter.resolve_arrival(self.piece.id)
+
+        self.assertTrue(self.arbiter.is_piece_busy(self.piece.id))
+        self.assertEqual(self.piece.state, "moving")
+
+    def test_resolve_arrival_is_noop_for_unknown_piece_id(self) -> None:
+        self.arbiter.resolve_arrival("no_such_piece")  # must not raise
+
+    def test_completed_unresolved_motion_emits_its_arrival_exactly_once(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        first = self.arbiter.advance_time(1000)
+        second = self.arbiter.advance_time(1)
+
+        self.assertEqual(len(first), 1)
+        self.assertEqual(first[0].piece.id, self.piece.id)
+        self.assertEqual(second, [])
+
+    def test_completed_unresolved_motion_elapsed_ms_does_not_grow_past_duration(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        self.arbiter.advance_time(1000)
+        self.arbiter.advance_time(500)
+        self.arbiter.advance_time(500)
+
+        elapsed = self.arbiter.active_actions()[0].elapsed_ms
+        self.assertEqual(elapsed, 1000)
+
+    def test_next_boundary_ms_ignores_completed_unresolved_motions(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)  # 1000ms
+
+        self.arbiter.advance_time(1000)  # completes, left unresolved
+
+        # Nothing else scheduled: the completed-but-inert motion must not
+        # manufacture a zero-length boundary.
+        self.assertIsNone(self.arbiter.next_boundary_ms())
+
+        other = Piece("bR_2_0", "b", "R", Position(2, 0))
+        self.arbiter.start_motion(other, Position(2, 0), Position(2, 2))  # 2000ms
+
+        # The still-pending motion's own remaining time is reported; the
+        # completed-and-inert one is excluded, not treated as a 0 boundary.
+        self.assertEqual(self.arbiter.next_boundary_ms(), 2000)
+
+    def test_completed_unresolved_motion_remains_observable_until_resolved(self) -> None:
+        self.arbiter.start_motion(self.piece, self.src, self.dst)
+
+        self.arbiter.advance_time(1000)
+        self.arbiter.advance_time(1000)  # a later call must not disturb it
+
+        self.assertTrue(self.arbiter.is_piece_busy(self.piece.id))
+        self.assertEqual(len(self.arbiter.active_actions()), 1)
+        self.assertEqual(self.piece.state, "moving")
+
+        self.arbiter.resolve_arrival(self.piece.id)
+
+        self.assertFalse(self.arbiter.is_piece_busy(self.piece.id))
+        self.assertEqual(self.arbiter.active_actions(), ())
+        self.assertEqual(self.piece.state, "idle")
+
+
+class TestTimedRecordValidation(unittest.TestCase):
+    """Harden Motion and Rest, the lowest-level owners of timed records,
+    against zero, negative, or boolean durations.
+    """
+
+    def setUp(self) -> None:
+        self.piece = Piece("wR_0_0", "w", "R", Position(0, 0))
+
+    def test_zero_duration_motion_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            Motion(
+                piece=self.piece,
+                action_kind="move",
+                source=Position(0, 0),
+                destination=Position(0, 0),
+                duration_ms=0,
+            )
+
+    def test_negative_duration_motion_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            Motion(
+                piece=self.piece,
+                action_kind="move",
+                source=Position(0, 0),
+                destination=Position(0, 1),
+                duration_ms=-1000,
+            )
+
+    def test_boolean_duration_motion_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            Motion(
+                piece=self.piece,
+                action_kind="move",
+                source=Position(0, 0),
+                destination=Position(0, 1),
+                duration_ms=True,
+            )
+
+    def test_positive_duration_motion_is_accepted(self) -> None:
+        motion = Motion(
+            piece=self.piece,
+            action_kind="move",
+            source=Position(0, 0),
+            destination=Position(0, 1),
+            duration_ms=1000,
+        )
+        self.assertEqual(motion.duration_ms, 1000)
+
+    def test_zero_duration_rest_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            Rest(piece=self.piece, rest_kind="short_rest", duration_ms=0)
+
+    def test_negative_duration_rest_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            Rest(piece=self.piece, rest_kind="short_rest", duration_ms=-500)
+
+    def test_boolean_duration_rest_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            Rest(piece=self.piece, rest_kind="short_rest", duration_ms=False)
+
+    def test_positive_duration_rest_is_accepted(self) -> None:
+        rest = Rest(piece=self.piece, rest_kind="long_rest", duration_ms=10000)
+        self.assertEqual(rest.duration_ms, 10000)
+
+    def test_zero_cooldown_configured_arbiter_rejects_on_start_rest(self) -> None:
+        arbiter = RealTimeArbiter(short_cooldown_ms=0)
+        piece = Piece("wP_1_0", "w", "P", Position(1, 0))
+
+        with self.assertRaises(ValueError):
+            arbiter.start_rest(piece, "short_rest")
+
+    def test_next_boundary_ms_positive_for_valid_active_motion_and_rest(self) -> None:
+        arbiter = RealTimeArbiter()
+        mover = Piece("wR_0_0", "w", "R", Position(0, 0))
+        rester = Piece("wN_1_0", "w", "N", Position(1, 0))
+
+        arbiter.start_motion(mover, Position(0, 0), Position(0, 1))
+        arbiter.start_rest(rester, "short_rest")
+
+        boundary = arbiter.next_boundary_ms()
+        self.assertIsNotNone(boundary)
+        self.assertGreater(boundary, 0)
