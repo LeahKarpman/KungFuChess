@@ -29,9 +29,9 @@ class TestRunLoop(unittest.TestCase):
 
     def setUp(self) -> None:
         close_patcher = patch.object(Img, "close_all_windows")
-        callback_patcher = patch.object(Img, "set_left_click_callback")
+        callback_patcher = patch.object(Img, "set_mouse_callbacks")
         self.mock_close_all_windows = close_patcher.start()
-        self.mock_set_left_click_callback = callback_patcher.start()
+        self.mock_set_mouse_callbacks = callback_patcher.start()
         self.addCleanup(close_patcher.stop)
         self.addCleanup(callback_patcher.stop)
 
@@ -106,7 +106,7 @@ class TestRunLoop(unittest.TestCase):
 
         run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
 
-        self.assertEqual(self.mock_set_left_click_callback.call_count, 1)
+        self.assertEqual(self.mock_set_mouse_callbacks.call_count, 1)
 
     def test_installed_callback_delegates_exact_coordinates_to_controller_click(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -116,10 +116,23 @@ class TestRunLoop(unittest.TestCase):
 
         run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
 
-        window_name, callback = self.mock_set_left_click_callback.call_args.args
-        callback(123, 456)
+        window_name, on_left_click, on_right_click = self.mock_set_mouse_callbacks.call_args.args
+        on_left_click(123, 456)
 
         controller.click.assert_called_once_with(123, 456)
+
+    def test_installed_callback_delegates_exact_coordinates_to_controller_jump(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = iter([0.0, 0.1])
+        poll_key = MagicMock(side_effect=[27])
+
+        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+
+        window_name, on_left_click, on_right_click = self.mock_set_mouse_callbacks.call_args.args
+        on_right_click(123, 456)
+
+        controller.jump.assert_called_once_with(123, 456)
 
     def test_rendering_receives_current_controller_selected(self) -> None:
         engine, renderer = _make_engine_and_renderer()

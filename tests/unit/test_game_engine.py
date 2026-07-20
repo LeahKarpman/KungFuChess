@@ -2,9 +2,10 @@ import unittest
 from unittest.mock import MagicMock
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
-from kungfu_chess.rules.rule_engine import MoveValidation, RuleEngine
+from kungfu_chess.rules.rule_engine import JumpValidation, MoveValidation, RuleEngine
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.board import Board
+from kungfu_chess.model.events import JumpStarted
 from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 
@@ -630,6 +631,120 @@ class TestJumpScheduling(unittest.TestCase):
         )
         self.assertIsNotNone(arrived_piece)
         self.assertEqual(arrived_piece.id, "wR_0_0")
+
+
+class TestJumpResult(unittest.TestCase):
+    """Verify the explicit JumpResult returned by GameEngine.jump()."""
+
+    def test_valid_jump_returns_ok(self) -> None:
+        engine, _ = _engine([". wK ."])
+
+        result = engine.jump(Position(0, 1))
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.reason, "ok")
+
+    def test_empty_position_returns_no_piece_at_position(self) -> None:
+        engine, _ = _engine([". ."])
+
+        result = engine.jump(Position(0, 0))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "no_piece_at_position")
+
+    def test_busy_piece_returns_piece_busy(self) -> None:
+        """A piece still on the board but scheduled elsewhere cannot also jump."""
+        engine, _ = _engine(["wR . ."])
+        engine.request_move(Position(0, 0), Position(0, 2))
+
+        result = engine.jump(Position(0, 0))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "piece_busy")
+
+    def test_game_over_returns_game_over(self) -> None:
+        engine, _ = _engine(["wR . bK"])
+        engine.request_move(Position(0, 0), Position(0, 2))
+        engine.wait(2000)
+        self.assertTrue(engine.game_over)
+
+        result = engine.jump(Position(0, 2))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "game_over")
+
+    def test_game_over_checked_before_rule_engine(self) -> None:
+        mock_rules = MagicMock(spec=RuleEngine)
+        board = parse_board([". wK ."])
+        engine = GameEngine(board, mock_rules, RealTimeArbiter())
+        engine._game_over = True
+
+        result = engine.jump(Position(0, 1))
+
+        self.assertEqual(result.reason, "game_over")
+        mock_rules.validate_jump.assert_not_called()
+
+    def test_rejected_jump_does_not_mutate_board(self) -> None:
+        engine, board = _engine([". ."])
+
+        engine.jump(Position(0, 0))
+
+        self.assertIsNone(board.get_piece(Position(0, 0)))
+
+    def test_rejected_jump_emits_no_jump_started(self) -> None:
+        engine, _ = _engine([". ."])
+
+        engine.jump(Position(0, 0))
+
+        self.assertEqual(engine.consume_events(), ())
+
+    def test_accepted_jump_starts_through_arbiter(self) -> None:
+        board = parse_board([". wK ."])
+        arbiter = RealTimeArbiter()
+        engine = GameEngine(board, RuleEngine(), arbiter)
+
+        engine.jump(Position(0, 1))
+
+        self.assertTrue(arbiter.is_piece_busy("wK_0_1"))
+
+    def test_accepted_jump_emits_exactly_one_jump_started(self) -> None:
+        engine, _ = _engine([". wK ."])
+
+        engine.jump(Position(0, 1))
+
+        events = engine.consume_events()
+        jump_started_events = [event for event in events if isinstance(event, JumpStarted)]
+        self.assertEqual(len(jump_started_events), 1)
+
+    def test_jump_validation_is_delegated_to_rule_engine(self) -> None:
+        mock_rules = MagicMock(spec=RuleEngine)
+        mock_rules.validate_jump.return_value = JumpValidation(ok=False, reason="injected_reason")
+        board = parse_board([". wK ."])
+        engine = GameEngine(board, mock_rules, RealTimeArbiter())
+
+        result = engine.jump(Position(0, 1))
+
+        mock_rules.validate_jump.assert_called_once_with(board, Position(0, 1))
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "injected_reason")
+
+    def test_all_piece_kinds_can_request_jump(self) -> None:
+        for kind in ["K", "Q", "R", "B", "N", "P"]:
+            with self.subTest(kind=kind):
+                engine, _ = _engine([f"w{kind}"])
+
+                result = engine.jump(Position(0, 0))
+
+                self.assertTrue(result.ok)
+
+    def test_both_colors_can_request_jump(self) -> None:
+        for color in ["w", "b"]:
+            with self.subTest(color=color):
+                engine, _ = _engine([f"{color}K"])
+
+                result = engine.jump(Position(0, 0))
+
+                self.assertTrue(result.ok)
 
 
 class TestPromotion(unittest.TestCase):

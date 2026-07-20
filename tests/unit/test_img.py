@@ -63,7 +63,7 @@ class TestImgWindowOperations(unittest.TestCase):
 
 
 class TestImgMouseCallback(unittest.TestCase):
-    """Verify left-click delegation without opening a real OpenCV window.
+    """Verify left/right-click dispatch without opening a real OpenCV window.
 
     namedWindow/setMouseCallback are mocked out so no real window is created,
     but the real cv2 event constants are used so the tests exercise the exact
@@ -74,45 +74,72 @@ class TestImgMouseCallback(unittest.TestCase):
     def _capture_on_mouse(mocked_set_mouse_callback) -> object:
         return mocked_set_mouse_callback.call_args.args[1]
 
-    def test_left_button_down_invokes_public_callback_with_coordinates(self) -> None:
-        callback = MagicMock()
+    def _install(self, on_left_click, on_right_click):
         with patch("kungfu_chess.ui.img.cv2.namedWindow") as mocked_named_window, patch(
             "kungfu_chess.ui.img.cv2.setMouseCallback"
         ) as mocked_set_mouse_callback:
-            Img.set_left_click_callback("Kung-Fu Chess", callback)
-            mocked_named_window.assert_called_once_with("Kung-Fu Chess")
+            Img.set_mouse_callbacks("Kung-Fu Chess", on_left_click, on_right_click)
             on_mouse = self._capture_on_mouse(mocked_set_mouse_callback)
+        return mocked_named_window, mocked_set_mouse_callback, on_mouse
+
+    def test_left_button_down_invokes_only_left_callback_with_coordinates(self) -> None:
+        on_left_click = MagicMock()
+        on_right_click = MagicMock()
+        mocked_named_window, _, on_mouse = self._install(on_left_click, on_right_click)
+        mocked_named_window.assert_called_once_with("Kung-Fu Chess")
 
         on_mouse(cv2.EVENT_LBUTTONDOWN, 42, 84, 0, None)
 
-        callback.assert_called_once_with(42, 84)
+        on_left_click.assert_called_once_with(42, 84)
+        on_right_click.assert_not_called()
 
-    def test_unrelated_mouse_events_do_not_invoke_public_callback(self) -> None:
-        callback = MagicMock()
-        with patch("kungfu_chess.ui.img.cv2.namedWindow"), patch(
-            "kungfu_chess.ui.img.cv2.setMouseCallback"
-        ) as mocked_set_mouse_callback:
-            Img.set_left_click_callback("Kung-Fu Chess", callback)
-            on_mouse = self._capture_on_mouse(mocked_set_mouse_callback)
+    def test_right_button_down_invokes_only_right_callback_with_coordinates(self) -> None:
+        on_left_click = MagicMock()
+        on_right_click = MagicMock()
+        _, _, on_mouse = self._install(on_left_click, on_right_click)
+
+        on_mouse(cv2.EVENT_RBUTTONDOWN, 42, 84, 0, None)
+
+        on_right_click.assert_called_once_with(42, 84)
+        on_left_click.assert_not_called()
+
+    def test_unrelated_mouse_events_invoke_neither_callback(self) -> None:
+        on_left_click = MagicMock()
+        on_right_click = MagicMock()
+        _, _, on_mouse = self._install(on_left_click, on_right_click)
 
         on_mouse(cv2.EVENT_MOUSEMOVE, 10, 20, 0, None)
-        on_mouse(cv2.EVENT_RBUTTONDOWN, 10, 20, 0, None)
         on_mouse(cv2.EVENT_LBUTTONUP, 10, 20, 0, None)
+        on_mouse(cv2.EVENT_RBUTTONUP, 10, 20, 0, None)
 
-        callback.assert_not_called()
+        on_left_click.assert_not_called()
+        on_right_click.assert_not_called()
 
-    def test_public_callback_receives_only_x_and_y(self) -> None:
+    def test_public_callbacks_receive_only_x_and_y(self) -> None:
         """OpenCV event/flags/userdata details must not leak past Img."""
-        callback = MagicMock()
-        with patch("kungfu_chess.ui.img.cv2.namedWindow"), patch(
-            "kungfu_chess.ui.img.cv2.setMouseCallback"
-        ) as mocked_set_mouse_callback:
-            Img.set_left_click_callback("Kung-Fu Chess", callback)
-            on_mouse = self._capture_on_mouse(mocked_set_mouse_callback)
+        on_left_click = MagicMock()
+        on_right_click = MagicMock()
+        _, _, on_mouse = self._install(on_left_click, on_right_click)
 
         on_mouse(cv2.EVENT_LBUTTONDOWN, 7, 9, 123, object())
+        on_mouse(cv2.EVENT_RBUTTONDOWN, 11, 13, 456, object())
 
-        callback.assert_called_once_with(7, 9)
+        on_left_click.assert_called_once_with(7, 9)
+        on_right_click.assert_called_once_with(11, 13)
+
+    def test_exactly_one_mouse_callback_is_installed(self) -> None:
+        _, mocked_set_mouse_callback, _ = self._install(MagicMock(), MagicMock())
+
+        self.assertEqual(mocked_set_mouse_callback.call_count, 1)
+
+    def test_named_window_created_before_callback_installed(self) -> None:
+        with patch("kungfu_chess.ui.img.cv2") as mocked_cv2:
+            Img.set_mouse_callbacks("Kung-Fu Chess", MagicMock(), MagicMock())
+
+        self.assertEqual(
+            [call[0] for call in mocked_cv2.method_calls],
+            ["namedWindow", "setMouseCallback"],
+        )
 
 
 class TestImgDrawRectangle(unittest.TestCase):

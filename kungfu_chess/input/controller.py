@@ -40,12 +40,18 @@ class Controller:
         return self._selected
 
     def jump(self, x: int, y: int) -> ControllerResult:
-        """Map a jump command to a board cell and delegate it to the engine."""
+        """Map a jump command to a board cell and delegate it to the engine.
+
+        Selection is cleared only when the engine accepts the jump, even if
+        the jumping piece is not the one currently selected.
+        """
         pos = self._mapper.pixel_to_cell(x, y)
         if pos is None:
             return ControllerResult(action="ignored")
 
-        self._engine.jump(pos)
+        result = self._engine.jump(pos)
+        if result.ok:
+            self._selected = None
         return ControllerResult(action="jump_requested", position=pos)
 
     def click(self, x: int, y: int) -> ControllerResult:
@@ -93,6 +99,7 @@ class Controller:
             return ControllerResult(action="ignored")
 
         src = self._selected
-        self._selected = None
-        self._engine.request_move(src, pos)
+        result = self._engine.request_move(src, pos)
+        if result.ok:
+            self._selected = None
         return ControllerResult(action="move_requested", position=pos)
