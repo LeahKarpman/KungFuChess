@@ -274,6 +274,62 @@ class TestControllerCooldownSelection(unittest.TestCase):
         self.assertEqual(result.action, "move_requested")
         self.assertIsNone(controller.selected)
 
+
+class TestControllerSelectionIdentity(unittest.TestCase):
+    """Verify selection survives by piece identity, not by stale cell position.
+
+    Selection must not silently keep pointing at a cell whose original
+    occupant was captured in place by the opponent — otherwise a later
+    click can be misattributed to whatever piece now sits on that cell.
+    """
+
+    def test_selected_property_self_heals_after_selected_piece_is_captured(
+        self,
+    ) -> None:
+        controller, engine = _setup(["wR . bR"])
+        controller.click(50, 50)  # select wR at (0, 0)
+        self.assertEqual(controller.selected, Position(0, 0))
+
+        engine.request_move(Position(0, 2), Position(0, 0))  # bR captures wR
+        engine.wait(2000)
+
+        self.assertIsNone(controller.selected)
+
+    def test_clicking_another_friendly_piece_reselects_immediately_after_capture(
+        self,
+    ) -> None:
+        """The stale selection must not hijack an unrelated piece's move.
+
+        Before selection was tracked by piece id, this click fell through to
+        the final branch and requested a move for the captured cell's new
+        (enemy) occupant instead of reselecting the clicked friendly piece —
+        and since that request was rejected, selection stayed stuck forever.
+        """
+        controller, engine = _setup(["wR . bR . wN"])
+        controller.click(50, 50)  # select wR at (0, 0)
+        self.assertEqual(controller.selected, Position(0, 0))
+
+        engine.request_move(Position(0, 2), Position(0, 0))  # bR captures wR
+        engine.wait(2000)  # bR now rests at (0, 0)
+
+        result = controller.click(450, 50)  # click own knight at (0, 4)
+
+        self.assertEqual(result.action, "selected")
+        self.assertEqual(controller.selected, Position(0, 4))
+
+    def test_reselection_after_capture_does_not_get_stuck_across_repeated_clicks(
+        self,
+    ) -> None:
+        controller, engine = _setup(["wR . bR . wN"])
+        controller.click(50, 50)  # select wR at (0, 0)
+        engine.request_move(Position(0, 2), Position(0, 0))  # bR captures wR
+        engine.wait(2000)
+
+        for _ in range(3):
+            result = controller.click(450, 50)  # click own knight at (0, 4)
+            self.assertEqual(result.action, "selected")
+            self.assertEqual(controller.selected, Position(0, 4))
+
     def test_selection_works_immediately_after_rest_completion(self) -> None:
         controller, engine = _setup(["wR . ."])
         engine.request_move(Position(0, 0), Position(0, 1))
