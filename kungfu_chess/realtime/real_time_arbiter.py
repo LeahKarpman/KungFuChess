@@ -90,18 +90,35 @@ class RealTimeArbiter:
     def next_boundary_ms(self) -> Optional[int]:
         """Return the simulated time until the nearest motion or rest completion.
 
-        Returns None when nothing is scheduled. GameEngine advances time in
-        steps of at most this size so that an arrival's side effects (a
-        capture cancelling a rest, a new rest starting) are always resolved
-        before a completion that happens later in simulated time, never
-        after it.
+        Returns None when nothing is left to advance toward. A completed
+        motion still awaiting resolve_arrival has nothing left to count
+        down — it is excluded so it can never manufacture a zero-length
+        boundary; only strictly positive remaining times are considered.
+        GameEngine advances time in steps of at most this size so that an
+        arrival's side effects (a capture cancelling a rest, a new rest
+        starting) are always resolved before a completion that happens
+        later in simulated time, never after it.
         """
         remaining = [motion.remaining_ms() for motion in self._motions.values()]
         remaining.extend(rest.remaining_ms() for rest in self._rests.values())
-        return min(remaining) if remaining else None
+        positive = [value for value in remaining if value > 0]
+        return min(positive) if positive else None
 
     def advance_time(self, ms: int) -> List[ArrivalEvent]:
-        """Advance every action and rest, returning arrival events in resolution order."""
+        """Advance every action and rest, returning arrival events in resolution order.
+
+        A motion that reaches completion is reported here but left in place
+        — still busy, still returned by active_actions — until the caller
+        acknowledges it via resolve_arrival. This lets a caller that cannot
+        yet apply a given arrival (GameOver was decided by an earlier
+        arrival in the same batch) leave it validly represented instead of
+        finalizing it and then discarding the outcome.
+
+        A motion already complete when this call starts is skipped
+        entirely — inert until resolve_arrival is called. Otherwise it
+        would keep accumulating elapsed_ms past its own duration and keep
+        re-emitting the same ArrivalEvent on every subsequent call.
+        """
         if ms <= 0:
             return []
 
@@ -109,7 +126,10 @@ class RealTimeArbiter:
 
         completed: List[Tuple[int, int, int, ArrivalEvent]] = []
 
-        for piece_id, motion in tuple(self._motions.items()):
+        for motion in self._motions.values():
+            if motion.is_complete():
+                continue
+
             remaining_ms = motion.remaining_ms()
             motion.advance(ms)
 
@@ -131,13 +151,25 @@ class RealTimeArbiter:
                 )
             )
 
-            if motion.piece.state == "moving":
-                motion.piece.state = "idle"
-
-            del self._motions[piece_id]
-
         completed.sort(key=lambda item: item[:3])
         return [event for _, _, _, event in completed]
+
+    def resolve_arrival(self, piece_id: str) -> None:
+        """Finalize a motion whose completion the caller has fully handled.
+
+        Removes it from scheduling and returns its piece to idle. A no-op
+        for an unknown piece_id or a motion that has not yet completed, so
+        callers can call it unconditionally once they decide an arrival's
+        outcome.
+        """
+        motion = self._motions.get(piece_id)
+        if motion is None or not motion.is_complete():
+            return
+
+        if motion.piece.state == "moving":
+            motion.piece.state = "idle"
+
+        del self._motions[piece_id]
 
     def _advance_rests(self, ms: int) -> None:
         """Advance every active cooldown, returning completed pieces to idle.
