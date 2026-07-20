@@ -728,6 +728,20 @@ class TestJumpResult(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.reason, "injected_reason")
 
+    def test_jump_rejects_gracefully_when_rule_engine_disagrees_with_board(self) -> None:
+        """A RuleEngine that (incorrectly) approves a jump with no piece there
+        must not crash GameEngine.jump(); it must reject cleanly instead.
+        """
+        mock_rules = MagicMock(spec=RuleEngine)
+        mock_rules.validate_jump.return_value = JumpValidation(ok=True, reason="ok")
+        board = parse_board([". ."])
+        engine = GameEngine(board, mock_rules, RealTimeArbiter())
+
+        result = engine.jump(Position(0, 0))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "no_piece_at_position")
+
     def test_all_piece_kinds_can_request_jump(self) -> None:
         for kind in ["K", "Q", "R", "B", "N", "P"]:
             with self.subTest(kind=kind):

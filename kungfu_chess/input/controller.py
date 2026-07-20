@@ -63,6 +63,11 @@ class Controller:
         self._selected_piece_id = None
         return None
 
+    def _clear_selection_if_accepted(self, ok: bool) -> None:
+        """Clear the selection only when the engine accepted the request."""
+        if ok:
+            self._selected_piece_id = None
+
     def jump(self, x: int, y: int) -> ControllerResult:
         """Map a jump command to a board cell and delegate it to the engine.
 
@@ -74,8 +79,7 @@ class Controller:
             return ControllerResult(action="ignored")
 
         result = self._engine.jump(pos)
-        if result.ok:
-            self._selected_piece_id = None
+        self._clear_selection_if_accepted(result.ok)
         return ControllerResult(action="jump_requested", position=pos)
 
     def click(self, x: int, y: int) -> ControllerResult:
@@ -123,6 +127,5 @@ class Controller:
 
         src = selected_piece.cell
         result = self._engine.request_move(src, pos)
-        if result.ok:
-            self._selected_piece_id = None
+        self._clear_selection_if_accepted(result.ok)
         return ControllerResult(action="move_requested", position=pos)

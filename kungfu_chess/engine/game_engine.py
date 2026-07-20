@@ -97,14 +97,19 @@ class GameEngine:
         if self._game_over:
             return JumpResult(ok=False, reason="game_over")
 
+        piece = self._board.get_piece(pos)
+        if piece is not None and self._arbiter.is_piece_busy(piece.id):
+            return JumpResult(ok=False, reason="piece_busy")
+
         validation = self._rules.validate_jump(self._board, pos)
         if not validation.ok:
             return JumpResult(ok=False, reason=validation.reason)
 
-        piece = self._board.get_piece(pos)
-        assert piece is not None
-        if self._arbiter.is_piece_busy(piece.id):
-            return JumpResult(ok=False, reason="piece_busy")
+        if piece is None:
+            # Defends against a RuleEngine implementation that disagrees with
+            # the board about piece presence; the stock RuleEngine never
+            # reaches this, since validate_jump already rejected it above.
+            return JumpResult(ok=False, reason="no_piece_at_position")
 
         self._arbiter.start_jump(piece, pos)
         self._board.remove_piece(pos)
