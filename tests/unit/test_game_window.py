@@ -6,8 +6,9 @@ from unittest.mock import MagicMock, patch
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.input.controller import Controller
 from kungfu_chess.model.position import Position
-from kungfu_chess.ui.game_window import run_loop
+from kungfu_chess.ui.game_window import CELL_SIZE, main, run_loop
 from kungfu_chess.ui.img import Img
+from kungfu_chess.ui.layout import BoardLayout
 from kungfu_chess.ui.renderer import BoardRenderer
 
 
@@ -41,7 +42,13 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.5, 1.2])
         poll_key = MagicMock(side_effect=[-1, 27])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
         engine.wait.assert_any_call(500)
         engine.wait.assert_any_call(700)
@@ -52,7 +59,13 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1])
         poll_key = MagicMock(side_effect=[27])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
         self.assertEqual(renderer.render.call_count, 1)
 
@@ -62,7 +75,13 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1])
         poll_key = MagicMock(side_effect=[ord("q")])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
         self.assertEqual(renderer.render.call_count, 1)
 
@@ -72,7 +91,13 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1, 0.2, 0.3])
         poll_key = MagicMock(side_effect=[-1, ord("a"), 27])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
         self.assertEqual(renderer.render.call_count, 3)
 
@@ -84,7 +109,13 @@ class TestRunLoop(unittest.TestCase):
         poll_key = MagicMock()
 
         with self.assertRaises(RuntimeError):
-            run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+            run_loop(
+                engine,
+                renderer,
+                controller,
+                clock=lambda: next(clock_values),
+                poll_key=poll_key,
+            )
 
         self.mock_close_all_windows.assert_called_once()
 
@@ -94,7 +125,13 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1])
         poll_key = MagicMock(side_effect=[27])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
         renderer.render.return_value.show_frame.assert_called_once()
 
@@ -104,32 +141,58 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1, 0.2, 0.3])
         poll_key = MagicMock(side_effect=[-1, ord("a"), 27])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
         self.assertEqual(self.mock_set_mouse_callbacks.call_count, 1)
 
-    def test_installed_callback_delegates_exact_coordinates_to_controller_click(self) -> None:
+    def test_installed_callback_delegates_exact_coordinates_to_controller_click(
+        self,
+    ) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
         poll_key = MagicMock(side_effect=[27])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
-        window_name, on_left_click, on_right_click = self.mock_set_mouse_callbacks.call_args.args
+        window_name, on_left_click, on_right_click = (
+            self.mock_set_mouse_callbacks.call_args.args
+        )
         on_left_click(123, 456)
 
         controller.click.assert_called_once_with(123, 456)
 
-    def test_installed_callback_delegates_exact_coordinates_to_controller_jump(self) -> None:
+    def test_installed_callback_delegates_exact_coordinates_to_controller_jump(
+        self,
+    ) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
         poll_key = MagicMock(side_effect=[27])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
-        window_name, on_left_click, on_right_click = self.mock_set_mouse_callbacks.call_args.args
+        window_name, on_left_click, on_right_click = (
+            self.mock_set_mouse_callbacks.call_args.args
+        )
         on_right_click(123, 456)
 
         controller.jump.assert_called_once_with(123, 456)
@@ -141,7 +204,13 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1])
         poll_key = MagicMock(side_effect=[27])
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
         renderer.render.assert_called_once_with(engine.snapshot.return_value, selected)
 
@@ -152,16 +221,51 @@ class TestRunLoop(unittest.TestCase):
 
         def poll_key(delay_ms: int) -> int:
             if renderer.render.call_count == 1:
-                controller.selected = Position(0, 0)  # simulate a click landing this frame
+                controller.selected = Position(
+                    0, 0
+                )  # simulate a click landing this frame
                 return -1
             return 27
 
-        run_loop(engine, renderer, controller, clock=lambda: next(clock_values), poll_key=poll_key)
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
 
         first_selected = renderer.render.call_args_list[0].args[1]
         second_selected = renderer.render.call_args_list[1].args[1]
         self.assertIsNone(first_selected)
         self.assertEqual(second_selected, Position(0, 0))
+
+
+class TestMainComposition(unittest.TestCase):
+    def test_renderer_and_mapper_receive_the_same_board_geometry(self) -> None:
+        layout = BoardLayout(cell_size=73, origin_x=11, origin_y=17)
+
+        with (
+            patch(
+                "kungfu_chess.ui.game_window.BoardLayout", return_value=layout
+            ) as layout_type,
+            patch("kungfu_chess.ui.game_window.SpriteLoader"),
+            patch("kungfu_chess.ui.game_window.BoardRenderer") as renderer_type,
+            patch("kungfu_chess.ui.game_window.BoardMapper") as mapper_type,
+            patch("kungfu_chess.ui.game_window.Controller"),
+            patch("kungfu_chess.ui.game_window.run_loop"),
+        ):
+            main()
+
+        layout_type.assert_called_once_with(cell_size=CELL_SIZE)
+        self.assertIs(renderer_type.call_args.args[2], layout)
+        mapper_type.assert_called_once_with(
+            8,
+            8,
+            cell_size=layout.cell_size,
+            origin_x=layout.origin_x,
+            origin_y=layout.origin_y,
+        )
 
 
 if __name__ == "__main__":
