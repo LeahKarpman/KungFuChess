@@ -31,10 +31,13 @@ class TestRunLoop(unittest.TestCase):
     def setUp(self) -> None:
         close_patcher = patch.object(Img, "close_all_windows")
         callback_patcher = patch.object(Img, "set_mouse_callbacks")
+        window_open_patcher = patch.object(Img, "is_window_open", return_value=True)
         self.mock_close_all_windows = close_patcher.start()
         self.mock_set_mouse_callbacks = callback_patcher.start()
+        self.mock_is_window_open = window_open_patcher.start()
         self.addCleanup(close_patcher.stop)
         self.addCleanup(callback_patcher.stop)
+        self.addCleanup(window_open_patcher.stop)
 
     def test_advances_engine_with_elapsed_milliseconds(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -68,6 +71,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(renderer.render.call_count, 1)
+        self.mock_close_all_windows.assert_called_once()
 
     def test_exits_on_q_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -84,6 +88,60 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(renderer.render.call_count, 1)
+        self.mock_close_all_windows.assert_called_once()
+
+    def test_exits_on_uppercase_q_key(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = iter([0.0, 0.1])
+        poll_key = MagicMock(side_effect=[ord("Q")])
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
+
+        self.assertEqual(renderer.render.call_count, 1)
+        self.mock_close_all_windows.assert_called_once()
+
+    def test_visible_window_keeps_loop_running(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = iter([0.0, 0.1, 0.2])
+        poll_key = MagicMock(side_effect=[-1, 27])
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
+
+        self.assertEqual(renderer.render.call_count, 2)
+        self.mock_is_window_open.assert_called_once_with("Kung-Fu Chess")
+
+    def test_exits_when_window_is_closed_with_x(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = iter([0.0, 0.1, 0.2])
+        poll_key = MagicMock(side_effect=[-1, -1])
+        self.mock_is_window_open.side_effect = [True, False]
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
+
+        self.assertEqual(renderer.render.call_count, 2)
+        self.assertEqual(self.mock_is_window_open.call_count, 2)
+        self.mock_close_all_windows.assert_called_once()
 
     def test_ignores_unrelated_keys_and_keeps_looping(self) -> None:
         engine, renderer = _make_engine_and_renderer()

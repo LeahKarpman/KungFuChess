@@ -55,6 +55,34 @@ class TestImgWindowOperations(unittest.TestCase):
         mocked_cv2.waitKey.assert_called_once_with(30)
         self.assertEqual(key, 27 & 0xFF)
 
+    def test_is_window_open_returns_true_for_visible_window(self) -> None:
+        with patch(
+            "kungfu_chess.ui.img.cv2.getWindowProperty", return_value=1.0
+        ) as mocked_get_window_property:
+            is_open = Img.is_window_open("Kung-Fu Chess")
+
+        mocked_get_window_property.assert_called_once_with(
+            "Kung-Fu Chess", cv2.WND_PROP_VISIBLE
+        )
+        self.assertTrue(is_open)
+
+    def test_is_window_open_returns_false_after_window_is_closed(self) -> None:
+        with patch("kungfu_chess.ui.img.cv2.getWindowProperty", return_value=-1.0):
+            is_open = Img.is_window_open("Kung-Fu Chess")
+
+        self.assertFalse(is_open)
+
+    def test_is_window_open_returns_false_when_opencv_reports_missing_window(
+        self,
+    ) -> None:
+        with patch(
+            "kungfu_chess.ui.img.cv2.getWindowProperty",
+            side_effect=cv2.error("Window no longer exists"),
+        ):
+            is_open = Img.is_window_open("Kung-Fu Chess")
+
+        self.assertFalse(is_open)
+
     def test_close_all_windows_delegates_to_destroy_all_windows(self) -> None:
         with patch("kungfu_chess.ui.img.cv2") as mocked_cv2:
             Img.close_all_windows()
@@ -75,9 +103,12 @@ class TestImgMouseCallback(unittest.TestCase):
         return mocked_set_mouse_callback.call_args.args[1]
 
     def _install(self, on_left_click, on_right_click):
-        with patch("kungfu_chess.ui.img.cv2.namedWindow") as mocked_named_window, patch(
-            "kungfu_chess.ui.img.cv2.setMouseCallback"
-        ) as mocked_set_mouse_callback:
+        with (
+            patch("kungfu_chess.ui.img.cv2.namedWindow") as mocked_named_window,
+            patch(
+                "kungfu_chess.ui.img.cv2.setMouseCallback"
+            ) as mocked_set_mouse_callback,
+        ):
             Img.set_mouse_callbacks("Kung-Fu Chess", on_left_click, on_right_click)
             on_mouse = self._capture_on_mouse(mocked_set_mouse_callback)
         return mocked_named_window, mocked_set_mouse_callback, on_mouse
@@ -93,7 +124,9 @@ class TestImgMouseCallback(unittest.TestCase):
         on_left_click.assert_called_once_with(42, 84)
         on_right_click.assert_not_called()
 
-    def test_right_button_down_invokes_only_right_callback_with_coordinates(self) -> None:
+    def test_right_button_down_invokes_only_right_callback_with_coordinates(
+        self,
+    ) -> None:
         on_left_click = MagicMock()
         on_right_click = MagicMock()
         _, _, on_mouse = self._install(on_left_click, on_right_click)
