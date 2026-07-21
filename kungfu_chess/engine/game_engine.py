@@ -32,6 +32,14 @@ class MoveResult:
     reason: str
 
 
+@dataclass(frozen=True)
+class JumpResult:
+    """Report whether a jump request was accepted and why."""
+
+    ok: bool
+    reason: str
+
+
 class GameEngine:
     """Coordinate rules, timed actions, arrivals, and game state."""
 
@@ -84,18 +92,29 @@ class GameEngine:
         self._emit(MoveStarted(piece_id=piece.id, source=src, destination=dst))
         return MoveResult(ok=True, reason="ok")
 
-    def jump(self, pos: Position) -> None:
-        """Start a timed jump for an idle piece on the requested cell."""
+    def jump(self, pos: Position) -> JumpResult:
+        """Validate and schedule a jump through the real-time arbiter."""
         if self._game_over:
-            return
+            return JumpResult(ok=False, reason="game_over")
 
         piece = self._board.get_piece(pos)
-        if piece is None or self._arbiter.is_piece_busy(piece.id):
-            return
+        if piece is not None and self._arbiter.is_piece_busy(piece.id):
+            return JumpResult(ok=False, reason="piece_busy")
+
+        validation = self._rules.validate_jump(self._board, pos)
+        if not validation.ok:
+            return JumpResult(ok=False, reason=validation.reason)
+
+        if piece is None:
+            # Defends against a RuleEngine implementation that disagrees with
+            # the board about piece presence; the stock RuleEngine never
+            # reaches this, since validate_jump already rejected it above.
+            return JumpResult(ok=False, reason="no_piece_at_position")
 
         self._arbiter.start_jump(piece, pos)
         self._board.remove_piece(pos)
         self._emit(JumpStarted(piece_id=piece.id, source=pos, destination=pos))
+        return JumpResult(ok=True, reason="ok")
 
     def wait(self, ms: int) -> None:
         """Advance simulated time in chronological steps, one boundary at a time.
@@ -124,7 +143,9 @@ class GameEngine:
             if self._game_over:
                 break
             boundary_ms = self._arbiter.next_boundary_ms()
-            step_ms = remaining_ms if boundary_ms is None else min(boundary_ms, remaining_ms)
+            step_ms = (
+                remaining_ms if boundary_ms is None else min(boundary_ms, remaining_ms)
+            )
             self._advance_step(step_ms)
             remaining_ms -= step_ms
 
@@ -210,7 +231,9 @@ class GameEngine:
             self._emit(GameOver(winner_color=winner_color))
         self._start_rest_if_alive(piece, "long_rest", event.leftover_ms)
 
-    def _start_rest_if_alive(self, piece: Piece, rest_kind: RestKind, leftover_ms: int) -> None:
+    def _start_rest_if_alive(
+        self, piece: Piece, rest_kind: RestKind, leftover_ms: int
+    ) -> None:
         """Begin the piece's cooldown, unless it was captured or the game just ended.
 
         Checked after capture and promotion resolve, so a piece removed from
@@ -226,7 +249,9 @@ class GameEngine:
             if rest_kind == "long_rest"
             else self._arbiter.short_cooldown_ms
         )
-        self._emit(RestStarted(piece_id=piece.id, rest_kind=rest_kind, duration_ms=duration_ms))
+        self._emit(
+            RestStarted(piece_id=piece.id, rest_kind=rest_kind, duration_ms=duration_ms)
+        )
         if piece.state == "idle":
             # leftover_ms already covered the full cooldown within this same wait().
             self._emit(RestCompleted(piece_id=piece.id))

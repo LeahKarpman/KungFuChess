@@ -59,7 +59,7 @@ def run_loop(
     clock and poll_key are injectable so the loop can be exercised deterministically
     in tests; the real UI always calls this with their default implementations.
     """
-    Img.set_left_click_callback(WINDOW_TITLE, controller.click)
+    Img.set_mouse_callbacks(WINDOW_TITLE, controller.click, controller.jump)
 
     last_time = clock()
     try:

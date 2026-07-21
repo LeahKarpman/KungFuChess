@@ -84,3 +84,54 @@ class TestRuleEngineBoundary(unittest.TestCase):
             for piece in board.all_pieces()
         )
         self.assertEqual(after, before)
+
+
+class TestRuleEngineJumpValidation(unittest.TestCase):
+    """Verify RuleEngine's jump-legality boundary: only piece presence matters."""
+
+    def setUp(self) -> None:
+        self.rules = RuleEngine()
+
+    def test_empty_position_returns_no_piece_at_position(self) -> None:
+        board = parse_board([". ."])
+
+        result = self.rules.validate_jump(board, Position(0, 0))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "no_piece_at_position")
+
+    def test_occupied_position_returns_ok(self) -> None:
+        board = parse_board(["wR ."])
+
+        result = self.rules.validate_jump(board, Position(0, 0))
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.reason, "ok")
+
+    def test_jump_validation_does_not_mutate_board_or_piece(self) -> None:
+        board = parse_board(["wR . bK"])
+        before = tuple(
+            (piece.id, piece.cell, piece.kind, piece.state)
+            for piece in board.all_pieces()
+        )
+
+        self.rules.validate_jump(board, Position(0, 0))
+        self.rules.validate_jump(board, Position(0, 1))
+
+        after = tuple(
+            (piece.id, piece.cell, piece.kind, piece.state)
+            for piece in board.all_pieces()
+        )
+        self.assertEqual(after, before)
+
+    def test_jump_validation_accepts_every_color_and_kind(self) -> None:
+        """No color- or kind-specific restrictions are applied to jumps."""
+        for kind in ["K", "Q", "R", "B", "N", "P"]:
+            for color in ["w", "b"]:
+                with self.subTest(kind=kind, color=color):
+                    board = parse_board([f"{color}{kind}"])
+
+                    result = self.rules.validate_jump(board, Position(0, 0))
+
+                    self.assertTrue(result.ok)
+                    self.assertEqual(result.reason, "ok")

@@ -118,11 +118,15 @@ class Img:
         cv2.destroyAllWindows()
 
     @staticmethod
-    def set_left_click_callback(
-        window_name: str, callback: Callable[[int, int], None]
+    def set_mouse_callbacks(
+        window_name: str,
+        on_left_click: Callable[[int, int], None],
+        on_right_click: Callable[[int, int], None],
     ) -> None:
-        """Invoke callback(x, y) once for every left-button press inside window_name.
+        """Invoke on_left_click(x, y) or on_right_click(x, y) for button presses inside window_name.
 
+        Installs exactly one OpenCV mouse callback, since OpenCV supports only one
+        callback per window, and dispatches it to the matching public callback.
         Creates the named window first if it does not exist yet, since OpenCV
         requires a window to exist before a mouse callback can be attached to it.
         All OpenCV mouse-event details (event codes, flags, userdata) stop here.
@@ -131,7 +135,9 @@ class Img:
 
         def _on_mouse(event: int, x: int, y: int, flags: int, userdata: object) -> None:
             if event == cv2.EVENT_LBUTTONDOWN:
-                callback(x, y)
+                on_left_click(x, y)
+            elif event == cv2.EVENT_RBUTTONDOWN:
+                on_right_click(x, y)
 
         cv2.setMouseCallback(window_name, _on_mouse)
 

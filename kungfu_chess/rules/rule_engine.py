@@ -17,8 +17,16 @@ class MoveValidation:
     reason: str
 
 
+@dataclass(frozen=True)
+class JumpValidation:
+    """Immutable outcome of validating a single jump request."""
+
+    ok: bool
+    reason: str
+
+
 class RuleEngine:
-    """Answer move-legality queries by delegating to piece_rules; never mutates state."""
+    """Answer move- and jump-legality queries; never mutates board or piece state."""
 
     def legal_destinations(self, board: Board, src: Position) -> Set[Position]:
         """Return the legal destinations for the piece at src, or empty if there is none."""
@@ -37,3 +45,9 @@ class RuleEngine:
         if dst not in self.legal_destinations(board, src):
             return MoveValidation(ok=False, reason="illegal_move")
         return MoveValidation(ok=True, reason="ok")
+
+    def validate_jump(self, board: Board, pos: Position) -> JumpValidation:
+        """Validate a proposed jump, reporting a reason string when it is rejected."""
+        if not board.get_piece(pos):
+            return JumpValidation(ok=False, reason="no_piece_at_position")
+        return JumpValidation(ok=True, reason="ok")
