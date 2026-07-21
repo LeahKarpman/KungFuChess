@@ -41,8 +41,7 @@ def _build_standard_engine() -> GameEngine:
     return GameEngine(board, RuleEngine(), arbiter)
 
 
-def _build_renderer() -> BoardRenderer:
-    layout = BoardLayout(cell_size=CELL_SIZE)
+def _build_renderer(layout: BoardLayout) -> BoardRenderer:
     sprite_loader = SpriteLoader(_ASSETS_ROOT / "pieces2")
     return BoardRenderer(_ASSETS_ROOT / "board.png", sprite_loader, layout)
 
@@ -84,8 +83,15 @@ def run_loop(
 def main() -> None:
     """Run the persistent real-time window until the user closes it."""
     engine = _build_standard_engine()
-    renderer = _build_renderer()
+    layout = BoardLayout(cell_size=CELL_SIZE)
+    renderer = _build_renderer(layout)
     snapshot = engine.snapshot()
-    mapper = BoardMapper(snapshot.width, snapshot.height, cell_size=CELL_SIZE)
+    mapper = BoardMapper(
+        snapshot.width,
+        snapshot.height,
+        cell_size=layout.cell_size,
+        origin_x=layout.origin_x,
+        origin_y=layout.origin_y,
+    )
     controller = Controller(mapper, engine)
     run_loop(engine, renderer, controller)
