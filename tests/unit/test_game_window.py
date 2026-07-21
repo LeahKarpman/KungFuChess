@@ -53,8 +53,67 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        engine.wait.assert_any_call(500)
-        engine.wait.assert_any_call(700)
+        self.assertEqual(
+            [call.args[0] for call in engine.wait.call_args_list],
+            [500, 700],
+        )
+
+    def test_accumulates_fractional_milliseconds_across_frames(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = iter([0.0, 0.0004, 0.0008, 0.0012])
+        poll_key = MagicMock(side_effect=[-1, -1, 27])
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
+
+        self.assertEqual(
+            [call.args[0] for call in engine.wait.call_args_list],
+            [0, 0, 1],
+        )
+
+    def test_total_delivered_time_matches_total_elapsed_time(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = [0.0, 1 / 60, 2 / 60, 3 / 60, 4 / 60]
+        clock = iter(clock_values)
+        poll_key = MagicMock(side_effect=[-1, -1, -1, 27])
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock),
+            poll_key=poll_key,
+        )
+
+        delivered_ms = sum(call.args[0] for call in engine.wait.call_args_list)
+        total_elapsed_ms = int((clock_values[-1] - clock_values[0]) * 1000)
+        self.assertEqual(delivered_ms, total_elapsed_ms)
+
+    def test_fractional_milliseconds_are_not_double_counted(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = iter([0.0, 0.0006, 0.0012, 0.0018, 0.0024])
+        poll_key = MagicMock(side_effect=[-1, -1, -1, 27])
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
+
+        self.assertEqual(
+            [call.args[0] for call in engine.wait.call_args_list],
+            [0, 1, 0, 1],
+        )
 
     def test_exits_on_escape_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
