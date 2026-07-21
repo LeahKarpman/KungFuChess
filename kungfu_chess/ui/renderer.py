@@ -9,8 +9,20 @@ from .img import Img
 from .layout import BoardLayout
 from .sprite_loader import SpriteLoader
 
-SELECTION_BORDER_COLOR = (0, 255, 255, 255)  # BGRA yellow, opaque: visible on light and dark cells
+SELECTION_BORDER_COLOR = (
+    0,
+    255,
+    255,
+    255,
+)  # BGRA yellow, opaque: visible on light and dark cells
 SELECTION_BORDER_THICKNESS = 3
+GAME_OVER_TEXT = "GAME OVER"
+GAME_OVER_TEXT_ORIGIN = (220, 422)
+GAME_OVER_FONT_SIZE = 2.0
+GAME_OVER_OUTLINE_COLOR = (0, 0, 0, 255)
+GAME_OVER_TEXT_COLOR = (255, 255, 255, 255)
+GAME_OVER_OUTLINE_THICKNESS = 8
+GAME_OVER_TEXT_THICKNESS = 3
 SUPPORTED_ACTION_KINDS = frozenset({"move", "jump"})
 
 
@@ -49,11 +61,14 @@ class BoardRenderer:
         """Return a new Img with the board, every snapshot piece, and an optional selection border.
 
         Render order is: base board, stationary idle pieces, resting pieces,
-        moving pieces, then the selection border, so the border always stays
-        visible on top and a piece with an active motion or rest is never
-        also drawn idle.
+        moving pieces, the game-over message, then the selection border, so
+        selection remains visible on top. A piece with an active motion or
+        rest is never also drawn idle.
         """
-        if snapshot.width != self._expected_width or snapshot.height != self._expected_height:
+        if (
+            snapshot.width != self._expected_width
+            or snapshot.height != self._expected_height
+        ):
             raise ValueError(
                 "Unsupported board dimensions for the supplied board image: "
                 f"expected {self._expected_width}x{self._expected_height}, "
@@ -65,7 +80,10 @@ class BoardRenderer:
         canvas = self._get_prepared_board().copy()
 
         for piece in snapshot.pieces:
-            if piece.id not in motions_by_piece_id and piece.id not in rests_by_piece_id:
+            if (
+                piece.id not in motions_by_piece_id
+                and piece.id not in rests_by_piece_id
+            ):
                 self._draw_stationary_piece(canvas, piece)
 
         for piece in snapshot.pieces:
@@ -78,8 +96,14 @@ class BoardRenderer:
             if motion is not None:
                 self._draw_moving_piece(canvas, piece, motion)
 
+        if snapshot.game_over:
+            self._draw_game_over_message(canvas)
+
         if selected is not None:
-            if not (0 <= selected.row < snapshot.height and 0 <= selected.col < snapshot.width):
+            if not (
+                0 <= selected.row < snapshot.height
+                and 0 <= selected.col < snapshot.width
+            ):
                 raise ValueError(
                     f"Selected position {selected} is outside the "
                     f"{snapshot.width}x{snapshot.height} board."
@@ -102,17 +126,13 @@ class BoardRenderer:
                     f"Motion references unknown piece_id: {motion.piece_id!r}"
                 )
             if motion.piece_id in motions_by_piece_id:
-                raise ValueError(
-                    f"Duplicate motion for piece_id: {motion.piece_id!r}"
-                )
+                raise ValueError(f"Duplicate motion for piece_id: {motion.piece_id!r}")
             motions_by_piece_id[motion.piece_id] = motion
 
         rests_by_piece_id: dict[str, RestSnapshot] = {}
         for rest in snapshot.rests:
             if rest.piece_id not in piece_ids:
-                raise ValueError(
-                    f"Rest references unknown piece_id: {rest.piece_id!r}"
-                )
+                raise ValueError(f"Rest references unknown piece_id: {rest.piece_id!r}")
             if rest.piece_id in rests_by_piece_id:
                 raise ValueError(f"Duplicate rest for piece_id: {rest.piece_id!r}")
             if rest.piece_id in motions_by_piece_id:
@@ -154,8 +174,30 @@ class BoardRenderer:
             piece.kind, piece.color, motion.action_kind, motion.elapsed_ms
         )
         sprite_height, sprite_width = sprite.img.shape[:2]
-        x, y = self._layout.centered_top_left_at_point(point, sprite_width, sprite_height)
+        x, y = self._layout.centered_top_left_at_point(
+            point, sprite_width, sprite_height
+        )
         sprite.draw_on(canvas, x, y)
+
+    @staticmethod
+    def _draw_game_over_message(canvas: Img) -> None:
+        x, y = GAME_OVER_TEXT_ORIGIN
+        canvas.put_text(
+            GAME_OVER_TEXT,
+            x,
+            y,
+            GAME_OVER_FONT_SIZE,
+            color=GAME_OVER_OUTLINE_COLOR,
+            thickness=GAME_OVER_OUTLINE_THICKNESS,
+        )
+        canvas.put_text(
+            GAME_OVER_TEXT,
+            x,
+            y,
+            GAME_OVER_FONT_SIZE,
+            color=GAME_OVER_TEXT_COLOR,
+            thickness=GAME_OVER_TEXT_THICKNESS,
+        )
 
     def _draw_selection_border(self, canvas: Img, selected: Position) -> None:
         """Draw a border around selected that stays fully inside the cell."""
