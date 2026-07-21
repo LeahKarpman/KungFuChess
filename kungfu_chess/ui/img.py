@@ -6,14 +6,18 @@ from typing import Callable
 import cv2
 import numpy as np
 
+
 class Img:
     def __init__(self):
         self.img = None
 
-    def read(self, path: str | pathlib.Path,
-             size: tuple[int, int] | None = None,
-             keep_aspect: bool = False,
-             interpolation: int = cv2.INTER_AREA) -> "Img":
+    def read(
+        self,
+        path: str | pathlib.Path,
+        size: tuple[int, int] | None = None,
+        keep_aspect: bool = False,
+        interpolation: int = cv2.INTER_AREA,
+    ) -> "Img":
         """
         Load `path` into self.img and **optionally resize**.
 
@@ -70,7 +74,7 @@ class Img:
         if y + h > H or x + w > W:
             raise ValueError("Logo does not fit at the specified position.")
 
-        roi = other_img.img[y:y + h, x:x + w]
+        roi = other_img.img[y : y + h, x : x + w]
 
         if self.img.shape[2] == 4:
             b, g, r, a = cv2.split(self.img)
@@ -78,14 +82,21 @@ class Img:
             for c in range(3):
                 roi[..., c] = (1 - mask) * roi[..., c] + mask * self.img[..., c]
         else:
-            other_img.img[y:y + h, x:x + w] = self.img
+            other_img.img[y : y + h, x : x + w] = self.img
 
     def put_text(self, txt, x, y, font_size, color=(255, 255, 255, 255), thickness=1):
         if self.img is None:
             raise ValueError("Image not loaded.")
-        cv2.putText(self.img, txt, (x, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, font_size,
-                    color, thickness, cv2.LINE_AA)
+        cv2.putText(
+            self.img,
+            txt,
+            (x, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            font_size,
+            color,
+            thickness,
+            cv2.LINE_AA,
+        )
 
     def show(self):
         if self.img is None:
@@ -111,6 +122,14 @@ class Img:
     def poll_key(delay_ms: int) -> int:
         """Process pending window events for delay_ms and return the pressed key code."""
         return cv2.waitKey(delay_ms) & 0xFF
+
+    @staticmethod
+    def is_window_open(window_name: str) -> bool:
+        """Return whether window_name still has a visible OpenCV window."""
+        try:
+            return cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1
+        except cv2.error:
+            return False
 
     @staticmethod
     def close_all_windows() -> None:

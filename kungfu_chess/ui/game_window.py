@@ -19,7 +19,7 @@ from .sprite_loader import SpriteLoader
 CELL_SIZE = 100
 WINDOW_TITLE = "Kung-Fu Chess"
 POLL_DELAY_MS = 30
-_EXIT_KEYS = frozenset({27, ord("q")})  # Escape, q
+_EXIT_KEYS = frozenset({27, ord("q"), ord("Q")})  # Escape, q, Q
 
 _UI_ROOT = Path(__file__).resolve().parent
 _PACKAGE_ROOT = _UI_ROOT.parent
@@ -53,7 +53,7 @@ def run_loop(
     clock: Callable[[], float] = time.perf_counter,
     poll_key: Callable[[int], int] = Img.poll_key,
 ) -> None:
-    """Advance and render the engine every iteration until Escape or q is pressed.
+    """Advance and render until the window closes or an exit key is pressed.
 
     clock and poll_key are injectable so the loop can be exercised deterministically
     in tests; the real UI always calls this with their default implementations.
@@ -73,7 +73,7 @@ def run_loop(
             frame.show_frame(WINDOW_TITLE)
 
             key = poll_key(POLL_DELAY_MS)
-            if key in _EXIT_KEYS:
+            if key in _EXIT_KEYS or not Img.is_window_open(WINDOW_TITLE):
                 break
     finally:
         Img.close_all_windows()
