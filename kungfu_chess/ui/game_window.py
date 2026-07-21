@@ -61,10 +61,13 @@ def run_loop(
     Img.set_mouse_callbacks(WINDOW_TITLE, controller.click, controller.jump)
 
     last_time = clock()
+    fractional_elapsed_ms = 0.0
     try:
         while True:
             now = clock()
-            elapsed_ms = int((now - last_time) * 1000)
+            total_elapsed_ms = (now - last_time) * 1000 + fractional_elapsed_ms
+            elapsed_ms = int(total_elapsed_ms)
+            fractional_elapsed_ms = total_elapsed_ms - elapsed_ms
             last_time = now
 
             engine.wait(elapsed_ms)
