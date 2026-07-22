@@ -115,6 +115,48 @@ class TestRunLoop(unittest.TestCase):
             [0, 1, 0, 1],
         )
 
+    def test_consumes_events_once_per_completed_iteration(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = iter([0.0, 0.1, 0.2, 0.3])
+        poll_key = MagicMock(side_effect=[-1, -1, 27])
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
+
+        self.assertEqual(engine.consume_events.call_count, 3)
+
+    def test_consumes_events_after_mouse_input_is_polled(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        clock_values = iter([0.0, 0.1])
+
+        def poll_key(delay_ms: int) -> int:
+            _, on_left_click, _ = self.mock_set_mouse_callbacks.call_args.args
+            on_left_click(123, 456)
+            return 27
+
+        def consume_events() -> tuple[object, ...]:
+            controller.click.assert_called_once_with(123, 456)
+            return ()
+
+        engine.consume_events.side_effect = consume_events
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
+
+        engine.consume_events.assert_called_once_with()
+
     def test_exits_on_escape_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
@@ -130,6 +172,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(renderer.render.call_count, 1)
+        engine.consume_events.assert_called_once_with()
         self.mock_close_all_windows.assert_called_once()
 
     def test_exits_on_q_key(self) -> None:
@@ -147,6 +190,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(renderer.render.call_count, 1)
+        engine.consume_events.assert_called_once_with()
         self.mock_close_all_windows.assert_called_once()
 
     def test_exits_on_uppercase_q_key(self) -> None:
@@ -164,6 +208,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(renderer.render.call_count, 1)
+        engine.consume_events.assert_called_once_with()
         self.mock_close_all_windows.assert_called_once()
 
     def test_visible_window_keeps_loop_running(self) -> None:
@@ -199,6 +244,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(renderer.render.call_count, 2)
+        self.assertEqual(engine.consume_events.call_count, 2)
         self.assertEqual(self.mock_is_window_open.call_count, 2)
         self.mock_close_all_windows.assert_called_once()
 

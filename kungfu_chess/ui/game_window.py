@@ -76,6 +76,7 @@ def run_loop(
             frame.show_frame(WINDOW_TITLE)
 
             key = poll_key(POLL_DELAY_MS)
+            _ = engine.consume_events()
             if key in _EXIT_KEYS or not Img.is_window_open(WINDOW_TITLE):
                 break
     finally:
