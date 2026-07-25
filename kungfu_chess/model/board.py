@@ -20,13 +20,36 @@ class Board:
 
     def add_piece(self, piece: Piece) -> None:
         """Place a piece in an unoccupied in-bounds cell."""
-        if not self.in_bounds(piece.cell):
+        self.place_piece(piece, piece.cell)
+
+    def place_piece(self, piece: Piece, position: Position) -> None:
+        """Place a settled piece and synchronize its logical cell."""
+        if not self.in_bounds(position):
             raise ValueError("piece_out_of_bounds")
-        if piece.cell in self._cells:
-            raise ValueError(f"Cell {piece.cell} is already occupied")
+        if position in self._cells:
+            raise ValueError(f"Cell {position} is already occupied")
         if any(existing.id == piece.id for existing in self._cells.values()):
             raise ValueError("duplicate_piece_id")
-        self._cells[piece.cell] = piece
+        piece._set_cell(position)
+        self._cells[position] = piece
+
+    def move_piece(self, source: Position, destination: Position) -> Piece:
+        """Move one settled piece between unoccupied in-bounds cells."""
+        if not self.in_bounds(source):
+            raise ValueError("source_out_of_bounds")
+        if not self.in_bounds(destination):
+            raise ValueError("destination_out_of_bounds")
+
+        piece = self._cells.get(source)
+        if piece is None:
+            raise ValueError("no_piece_at_source")
+        if destination in self._cells:
+            raise ValueError("destination_occupied")
+
+        del self._cells[source]
+        piece._set_cell(destination)
+        self._cells[destination] = piece
+        return piece
 
     def remove_piece(self, pos: Position) -> None:
         self._cells.pop(pos, None)

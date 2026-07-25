@@ -18,7 +18,7 @@ class Piece:
     id: str
     color: str
     kind: str
-    cell: Position
+    _cell: Position
     state: PieceState
 
     def __init__(
@@ -39,5 +39,14 @@ class Piece:
         self.id = id
         self.color = color
         self.kind = kind
-        self.cell = cell
+        self._cell = cell
         self.state = state
+
+    @property
+    def cell(self) -> Position:
+        """Return the piece's logical cell."""
+        return self._cell
+
+    def _set_cell(self, cell: Position) -> None:
+        """Update the logical cell through a model-owned board operation."""
+        self._cell = cell

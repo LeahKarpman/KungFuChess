@@ -161,19 +161,22 @@ class TestGameEngine(unittest.TestCase):
 
     def test_arrival_moves_piece_on_board(self) -> None:
         engine, board = _engine([". wR . ."])
+        source = Position(0, 1)
+        destination = Position(0, 3)
+        piece = board.get_piece(source)
         engine.request_move(
-            Position(0, 1),
-            Position(0, 3),
+            source,
+            destination,
         )
 
         engine.wait(2000)
 
-        self.assertIsNone(
-            board.get_piece(Position(0, 1)),
-        )
-        self.assertIsNotNone(
-            board.get_piece(Position(0, 3)),
-        )
+        self.assertIsNotNone(piece)
+        self.assertIsNone(board.get_piece(source))
+        self.assertIs(board.get_piece(destination), piece)
+        self.assertEqual(piece.cell, destination)
+        snapshot_piece = next(p for p in engine.snapshot().pieces if p.id == piece.id)
+        self.assertEqual(snapshot_piece.cell, destination)
 
     def test_king_capture_sets_game_over(self) -> None:
         engine, _ = _engine(["wR . bK"])
@@ -288,16 +291,28 @@ class TestGameEngine(unittest.TestCase):
 
     def test_captured_piece_keeps_captured_state(self) -> None:
         engine, board = _engine(["wR . bK"])
-        captured_piece = board.get_piece(Position(0, 2))
+        source = Position(0, 0)
+        destination = Position(0, 2)
+        moving_piece = board.get_piece(source)
+        captured_piece = board.get_piece(destination)
 
         engine.request_move(
-            Position(0, 0),
-            Position(0, 2),
+            source,
+            destination,
         )
         engine.wait(2000)
 
+        self.assertIsNotNone(moving_piece)
         self.assertIsNotNone(captured_piece)
+        self.assertIsNone(board.get_piece(source))
+        self.assertIs(board.get_piece(destination), moving_piece)
+        self.assertEqual(moving_piece.cell, destination)
         self.assertEqual(captured_piece.state, "captured")
+        self.assertEqual(captured_piece.cell, destination)
+        snapshot_piece = next(
+            piece for piece in engine.snapshot().pieces if piece.id == moving_piece.id
+        )
+        self.assertEqual(snapshot_piece.cell, destination)
 
 
 class TestConcurrentMotions(unittest.TestCase):
@@ -487,20 +502,29 @@ class TestLandingReservation(unittest.TestCase):
     ) -> None:
         lines = [". . .", "wP bR .", ". . ."]
         engine, board = _engine(lines)
-        engine.jump(Position(1, 0))
+        landing = Position(1, 0)
+        enemy_source = Position(1, 1)
+        jumping_piece = board.get_piece(landing)
+        captured_piece = board.get_piece(enemy_source)
+        engine.jump(landing)
         engine.request_move(
-            Position(1, 1),
-            Position(1, 0),
+            enemy_source,
+            landing,
         )
 
         engine.wait(1000)
 
-        jumper = board.get_piece(Position(1, 0))
-        self.assertIsNotNone(jumper)
-        self.assertEqual(jumper.color, "w")
-        self.assertIsNone(
-            board.get_piece(Position(1, 1)),
+        self.assertIsNotNone(jumping_piece)
+        self.assertIsNotNone(captured_piece)
+        self.assertIs(board.get_piece(landing), jumping_piece)
+        self.assertIsNone(board.get_piece(enemy_source))
+        self.assertEqual(jumping_piece.cell, landing)
+        self.assertEqual(captured_piece.cell, landing)
+        self.assertEqual(captured_piece.state, "captured")
+        snapshot_piece = next(
+            piece for piece in engine.snapshot().pieces if piece.id == jumping_piece.id
         )
+        self.assertEqual(snapshot_piece.cell, landing)
 
     def test_jump_capture_of_enemy_king_sets_game_over(self) -> None:
         """Apply the king-capture rule through the jump arrival path."""
@@ -571,16 +595,23 @@ class TestJumpScheduling(unittest.TestCase):
 
     def test_jump_updates_piece_lifecycle(self) -> None:
         engine, board = _engine([". wK ."])
-        piece = board.get_piece(Position(0, 1))
+        landing = Position(0, 1)
+        piece = board.get_piece(landing)
 
-        engine.jump(Position(0, 1))
+        engine.jump(landing)
 
         self.assertIsNotNone(piece)
+        self.assertIsNone(board.get_piece(landing))
+        self.assertEqual(piece.cell, landing)
         self.assertEqual(piece.state, "moving")
 
         engine.wait(1000)
 
+        self.assertIs(board.get_piece(landing), piece)
+        self.assertEqual(piece.cell, landing)
         self.assertEqual(piece.state, "short_rest")
+        snapshot_piece = next(p for p in engine.snapshot().pieces if p.id == piece.id)
+        self.assertEqual(snapshot_piece.cell, landing)
 
     def test_game_engine_does_not_store_airborne_pieces(self) -> None:
         engine, _ = _engine([". wK ."])
