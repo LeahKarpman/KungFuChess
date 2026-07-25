@@ -178,9 +178,8 @@ class GameEngine:
         if target and target.color != piece.color:
             winner_color = self._capture_piece(target, event.destination, piece)
 
-        if not self._board.get_piece(event.destination):
-            piece.cell = event.destination
-            self._board.add_piece(piece)
+        if self._board.get_piece(event.destination) is None:
+            self._board.place_piece(piece, event.destination)
             self._emit(
                 JumpCompleted(
                     piece_id=piece.id,
@@ -209,14 +208,11 @@ class GameEngine:
         if target is not None and target.color == piece.color:
             return
 
-        self._board.remove_piece(event.source)
-
         winner_color = None
         if target:
             winner_color = self._capture_piece(target, event.destination, piece)
 
-        piece.cell = event.destination
-        self._board.add_piece(piece)
+        self._board.move_piece(event.source, event.destination)
         self._emit(
             MoveCompleted(
                 piece_id=piece.id,
