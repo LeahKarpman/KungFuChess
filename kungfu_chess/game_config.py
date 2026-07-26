@@ -5,8 +5,10 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_SHORT_COOLDOWN_MS = 2000
-DEFAULT_LONG_COOLDOWN_MS = 10000
+from .realtime.rest import (
+    DEFAULT_LONG_COOLDOWN_MS,
+    DEFAULT_SHORT_COOLDOWN_MS,
+)
 
 
 @dataclass(frozen=True)

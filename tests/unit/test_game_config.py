@@ -7,6 +7,10 @@ from pathlib import Path
 
 import kungfu_chess
 from kungfu_chess.game_config import GameConfig, load_game_config
+from kungfu_chess.realtime.rest import (
+    DEFAULT_LONG_COOLDOWN_MS,
+    DEFAULT_SHORT_COOLDOWN_MS,
+)
 
 PRODUCTION_CONFIG_PATH = (
     Path(kungfu_chess.__file__).resolve().parent / "resources" / "game_config.json"
@@ -16,8 +20,10 @@ PRODUCTION_CONFIG_PATH = (
 class TestGameConfigDefaults(unittest.TestCase):
     def test_default_values_are_2000_and_10000_ms(self) -> None:
         config = GameConfig()
-        self.assertEqual(config.short_cooldown_ms, 2000)
-        self.assertEqual(config.long_cooldown_ms, 10000)
+        self.assertEqual(config.short_cooldown_ms, DEFAULT_SHORT_COOLDOWN_MS)
+        self.assertEqual(config.long_cooldown_ms, DEFAULT_LONG_COOLDOWN_MS)
+        self.assertEqual(DEFAULT_SHORT_COOLDOWN_MS, 2000)
+        self.assertEqual(DEFAULT_LONG_COOLDOWN_MS, 10000)
 
 
 class TestProductionGameConfigFile(unittest.TestCase):
