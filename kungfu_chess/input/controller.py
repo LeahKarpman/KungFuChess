@@ -107,6 +107,10 @@ class Controller:
             self._selected_piece_id = piece_at_pos.id
             return ControllerResult(action="selected", position=pos)
 
+        if piece_at_pos is not None and piece_at_pos.id == selected_piece.id:
+            self._selected_piece_id = None
+            return ControllerResult(action="cancelled", position=pos)
+
         if (
             piece_at_pos is not None
             and piece_at_pos.state != "moving"
