@@ -82,7 +82,10 @@ class TestController(unittest.TestCase):
         mock_engine.snapshot.return_value = MagicMock(
             pieces=[MagicMock(cell=Position(0, 0))]
         )
-        mock_engine.request_move.return_value = MoveResult(ok=False, reason="illegal_move")
+        mock_engine.request_move.return_value = MoveResult(
+            ok=False,
+            reason="illegal_piece_move",
+        )
         mapper = BoardMapper(3, 1)
         controller = Controller(mapper, mock_engine)
         controller.click(50, 50)
@@ -97,7 +100,7 @@ class TestController(unittest.TestCase):
         """Same rule, exercised through the real engine and rule engine.
 
         A knight on a single-row board has no legal destination, so the
-        engine rejects the move with 'illegal_move' and selection survives.
+        engine rejects the move with 'illegal_piece_move' and selection survives.
         """
         controller, _ = _setup(["wN . ."])
         controller.click(50, 50)

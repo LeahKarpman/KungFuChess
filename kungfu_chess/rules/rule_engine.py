@@ -40,10 +40,23 @@ class RuleEngine:
         self, board: Board, src: Position, dst: Position
     ) -> MoveValidation:
         """Validate a proposed move, reporting a reason string when it is rejected."""
-        if not board.get_piece(src):
-            return MoveValidation(ok=False, reason="no_piece_at_source")
+        if not board.in_bounds(src) or not board.in_bounds(dst):
+            return MoveValidation(ok=False, reason="outside_board")
+
+        piece = board.get_piece(src)
+        if piece is None:
+            return MoveValidation(ok=False, reason="empty_source")
+
+        destination_piece = board.get_piece(dst)
+        if (
+            destination_piece is not None
+            and destination_piece.color == piece.color
+        ):
+            return MoveValidation(ok=False, reason="friendly_destination")
+
         if dst not in self.legal_destinations(board, src):
-            return MoveValidation(ok=False, reason="illegal_move")
+            return MoveValidation(ok=False, reason="illegal_piece_move")
+
         return MoveValidation(ok=True, reason="ok")
 
     def validate_jump(self, board: Board, pos: Position) -> JumpValidation:

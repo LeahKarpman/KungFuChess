@@ -80,16 +80,35 @@ class TestGameEngine(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.reason, "piece_busy")
 
-    def test_missing_source_returns_rule_engine_reason(self) -> None:
+    def test_empty_source_reason_propagates_without_starting_motion(self) -> None:
         engine, _ = _engine([". ."])
+        before = engine.snapshot()
 
         result = engine.request_move(Position(0, 0), Position(0, 1))
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "no_piece_at_source")
+        self.assertEqual(result.reason, "empty_source")
+        self.assertEqual(engine.snapshot(), before)
+        self.assertEqual(engine.consume_events(), ())
 
-    def test_illegal_move_returns_reason(self) -> None:
+    def test_friendly_destination_reason_propagates_without_starting_motion(
+        self,
+    ) -> None:
+        engine, _ = _engine(["wR wP"])
+        before = engine.snapshot()
+
+        result = engine.request_move(Position(0, 0), Position(0, 1))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "friendly_destination")
+        self.assertEqual(engine.snapshot(), before)
+        self.assertEqual(engine.consume_events(), ())
+
+    def test_illegal_piece_move_reason_propagates_without_starting_motion(
+        self,
+    ) -> None:
         engine, _ = _engine([". . .", ". wR .", ". . ."])
+        before = engine.snapshot()
 
         result = engine.request_move(
             Position(1, 1),
@@ -97,7 +116,20 @@ class TestGameEngine(unittest.TestCase):
         )
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "illegal_move")
+        self.assertEqual(result.reason, "illegal_piece_move")
+        self.assertEqual(engine.snapshot(), before)
+        self.assertEqual(engine.consume_events(), ())
+
+    def test_outside_board_reason_propagates_without_starting_motion(self) -> None:
+        engine, _ = _engine(["wR ."])
+        before = engine.snapshot()
+
+        result = engine.request_move(Position(0, 0), Position(-1, 0))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "outside_board")
+        self.assertEqual(engine.snapshot(), before)
+        self.assertEqual(engine.consume_events(), ())
 
     def test_game_over_checked_before_rule_engine(self) -> None:
         mock_rules = MagicMock(spec=RuleEngine)
@@ -131,18 +163,6 @@ class TestGameEngine(unittest.TestCase):
 
         self.assertFalse(result.ok)
         self.assertEqual(result.reason, "piece_busy")
-
-    def test_invalid_move_does_not_mutate_board(self) -> None:
-        engine, board = _engine([". wR ."])
-
-        engine.request_move(
-            Position(0, 1),
-            Position(1, 2),
-        )
-
-        self.assertIsNotNone(
-            board.get_piece(Position(0, 1)),
-        )
 
     def test_wait_delegates_to_arbiter(self) -> None:
         mock_arbiter = MagicMock(spec=RealTimeArbiter)
@@ -1107,7 +1127,7 @@ class TestCooldownCaptures(unittest.TestCase):
         result = engine.request_move(Position(0, 3), Position(0, 0))
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "illegal_move")
+        self.assertEqual(result.reason, "illegal_piece_move")
 
     def test_resting_enemy_can_be_captured(self) -> None:
         engine, board = _engine(["wR . . bR"])

@@ -13,21 +13,99 @@ class TestRuleEngineBoundary(unittest.TestCase):
     def setUp(self) -> None:
         self.rules = RuleEngine()
 
-    def test_missing_source_returns_explicit_validation_reason(self) -> None:
+    def test_outside_source_returns_outside_board_before_piece_inspection(
+        self,
+    ) -> None:
+        board = parse_board([". ."])
+        destination = Position(0, 1)
+
+        for source in (Position(-1, 0), Position(board.height, 0)):
+            with self.subTest(source=source):
+                with (
+                    patch.object(
+                        board,
+                        "get_piece",
+                        wraps=board.get_piece,
+                    ) as get_piece,
+                    patch.object(
+                        self.rules,
+                        "legal_destinations",
+                        wraps=self.rules.legal_destinations,
+                    ) as legal_destinations,
+                ):
+                    result = self.rules.validate_move(board, source, destination)
+
+                self.assertFalse(result.ok)
+                self.assertEqual(result.reason, "outside_board")
+                get_piece.assert_not_called()
+                legal_destinations.assert_not_called()
+
+    def test_outside_destination_returns_outside_board_before_piece_inspection(
+        self,
+    ) -> None:
+        board = parse_board(["wR ."])
+        source = Position(0, 0)
+
+        for destination in (Position(0, -1), Position(0, board.width)):
+            with self.subTest(destination=destination):
+                with (
+                    patch.object(
+                        board,
+                        "get_piece",
+                        wraps=board.get_piece,
+                    ) as get_piece,
+                    patch.object(
+                        self.rules,
+                        "legal_destinations",
+                        wraps=self.rules.legal_destinations,
+                    ) as legal_destinations,
+                ):
+                    result = self.rules.validate_move(board, source, destination)
+
+                self.assertFalse(result.ok)
+                self.assertEqual(result.reason, "outside_board")
+                get_piece.assert_not_called()
+                legal_destinations.assert_not_called()
+
+    def test_empty_source_returns_empty_source(self) -> None:
         board = parse_board([". ."])
 
         result = self.rules.validate_move(board, Position(0, 0), Position(0, 1))
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "no_piece_at_source")
+        self.assertEqual(result.reason, "empty_source")
 
-    def test_illegal_destination_returns_illegal_move(self) -> None:
+    def test_friendly_destination_returns_friendly_destination(self) -> None:
+        board = parse_board(["wR wP"])
+
+        result = self.rules.validate_move(board, Position(0, 0), Position(0, 1))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "friendly_destination")
+
+    def test_same_source_and_destination_returns_friendly_destination(self) -> None:
+        board = parse_board(["wR ."])
+
+        result = self.rules.validate_move(board, Position(0, 0), Position(0, 0))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "friendly_destination")
+
+    def test_invalid_geometry_returns_illegal_piece_move(self) -> None:
         board = parse_board([". . .", ". wR .", ". . ."])
 
         result = self.rules.validate_move(board, Position(1, 1), Position(0, 2))
 
         self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "illegal_move")
+        self.assertEqual(result.reason, "illegal_piece_move")
+
+    def test_blocked_sliding_move_returns_illegal_piece_move(self) -> None:
+        board = parse_board(["wR wP ."])
+
+        result = self.rules.validate_move(board, Position(0, 0), Position(0, 2))
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.reason, "illegal_piece_move")
 
     def test_legal_destination_returns_ok(self) -> None:
         board = parse_board([". . .", ". wR .", ". . ."])
@@ -71,7 +149,13 @@ class TestRuleEngineBoundary(unittest.TestCase):
                 ". . .",
             ]
         )
-        before = tuple(
+        positions = tuple(
+            Position(row, col)
+            for row in range(board.height)
+            for col in range(board.width)
+        )
+        occupancy_before = tuple(board.get_piece(position) for position in positions)
+        pieces_before = tuple(
             (piece.id, piece.cell, piece.kind, piece.state)
             for piece in board.all_pieces()
         )
@@ -79,11 +163,13 @@ class TestRuleEngineBoundary(unittest.TestCase):
         self.rules.legal_destinations(board, Position(0, 0))
         self.rules.validate_move(board, Position(1, 1), Position(0, 1))
 
-        after = tuple(
+        occupancy_after = tuple(board.get_piece(position) for position in positions)
+        pieces_after = tuple(
             (piece.id, piece.cell, piece.kind, piece.state)
             for piece in board.all_pieces()
         )
-        self.assertEqual(after, before)
+        self.assertEqual(occupancy_after, occupancy_before)
+        self.assertEqual(pieces_after, pieces_before)
 
 
 class TestRuleEngineJumpValidation(unittest.TestCase):
