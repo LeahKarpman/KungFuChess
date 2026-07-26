@@ -4,9 +4,10 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from kungfu_chess.engine.game_engine import GameEngine
+from kungfu_chess.input.board_mapper import DEFAULT_CELL_SIZE
 from kungfu_chess.input.controller import Controller
 from kungfu_chess.model.position import Position
-from kungfu_chess.ui.game_window import CELL_SIZE, main, run_loop
+from kungfu_chess.ui.game_window import main, run_loop
 from kungfu_chess.ui.img import Img
 from kungfu_chess.ui.layout import BoardLayout
 from kungfu_chess.ui.renderer import BoardRenderer
@@ -420,7 +421,7 @@ class TestMainComposition(unittest.TestCase):
         ):
             main()
 
-        layout_type.assert_called_once_with(cell_size=CELL_SIZE)
+        layout_type.assert_called_once_with(cell_size=DEFAULT_CELL_SIZE)
         self.assertIs(renderer_type.call_args.args[2], layout)
         mapper_type.assert_called_once_with(
             8,

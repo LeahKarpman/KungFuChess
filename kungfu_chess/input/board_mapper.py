@@ -1,7 +1,7 @@
 from __future__ import annotations
 from ..model.position import Position
 
-CELL_SIZE = 100
+DEFAULT_CELL_SIZE = 100
 
 
 class BoardMapper:
@@ -9,7 +9,7 @@ class BoardMapper:
         self,
         width: int,
         height: int,
-        cell_size: int = CELL_SIZE,
+        cell_size: int = DEFAULT_CELL_SIZE,
         origin_x: int = 0,
         origin_y: int = 0,
     ) -> None:
