@@ -6,7 +6,7 @@ from typing import Callable
 
 from ..engine.game_engine import GameEngine
 from ..game_config import load_game_config
-from ..input.board_mapper import BoardMapper
+from ..input.board_mapper import BoardMapper, DEFAULT_CELL_SIZE
 from ..input.controller import Controller
 from ..io.board_parser import parse_board
 from ..realtime.real_time_arbiter import RealTimeArbiter
@@ -16,7 +16,6 @@ from .layout import BoardLayout
 from .renderer import BoardRenderer
 from .sprite_loader import SpriteLoader
 
-CELL_SIZE = 100
 WINDOW_TITLE = "Kung-Fu Chess"
 POLL_DELAY_MS = 30
 _EXIT_KEYS = frozenset({27, ord("q"), ord("Q")})  # Escape, q, Q
@@ -87,7 +86,7 @@ def run_loop(
 def main() -> None:
     """Run the persistent real-time window until the user closes it."""
     engine = _build_standard_engine()
-    layout = BoardLayout(cell_size=CELL_SIZE)
+    layout = BoardLayout(cell_size=DEFAULT_CELL_SIZE)
     renderer = _build_renderer(layout)
     snapshot = engine.snapshot()
     mapper = BoardMapper(
