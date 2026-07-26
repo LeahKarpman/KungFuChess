@@ -8,6 +8,7 @@ from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.rules.rule_engine import RuleEngine
 from kungfu_chess.input.board_mapper import BoardMapper
 from kungfu_chess.io.board_parser import parse_board
+from kungfu_chess.model.game_state import PieceSnapshot
 from kungfu_chess.model.position import Position
 
 
@@ -51,6 +52,59 @@ class TestController(unittest.TestCase):
 
         self.assertEqual(result.action, "cancelled")
         self.assertIsNone(controller.selected)
+
+    def test_clicking_selected_piece_cancels_selection(self) -> None:
+        controller, _ = _setup(["wR . ."])
+        controller.click(50, 50)
+        self.assertEqual(controller.selected, Position(0, 0))
+
+        result = controller.click(50, 50)
+
+        self.assertEqual(result.action, "cancelled")
+        self.assertEqual(result.position, Position(0, 0))
+        self.assertIsNone(controller.selected)
+
+    def test_clicking_selected_piece_does_not_request_move(self) -> None:
+        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine.snapshot.return_value = MagicMock(
+            pieces=(
+                PieceSnapshot(
+                    id="piece-a",
+                    color="w",
+                    kind="R",
+                    cell=Position(0, 0),
+                    state="idle",
+                ),
+            )
+        )
+        controller = Controller(BoardMapper(3, 1), mock_engine)
+        controller.click(50, 50)
+
+        result = controller.click(50, 50)
+
+        self.assertEqual(result.action, "cancelled")
+        mock_engine.request_move.assert_not_called()
+
+    def test_clicking_selected_piece_leaves_engine_state_unchanged(self) -> None:
+        controller, engine = _setup(["wR . ."])
+        controller.click(50, 50)
+        snapshot_before = engine.snapshot()
+
+        controller.click(50, 50)
+
+        self.assertEqual(engine.snapshot(), snapshot_before)
+        self.assertEqual(engine.consume_events(), ())
+
+    def test_clicking_different_friendly_piece_replaces_selection(self) -> None:
+        controller, _ = _setup(["wR wN ."])
+        controller.click(50, 50)
+        self.assertEqual(controller.selected, Position(0, 0))
+
+        result = controller.click(150, 50)
+
+        self.assertEqual(result.action, "selected")
+        self.assertEqual(result.position, Position(0, 1))
+        self.assertEqual(controller.selected, Position(0, 1))
 
     def test_second_inboard_click_sends_move_and_clears_selection(self) -> None:
         mock_engine = MagicMock(spec=GameEngine)
@@ -320,7 +374,7 @@ class TestControllerSelectionIdentity(unittest.TestCase):
         self.assertEqual(result.action, "selected")
         self.assertEqual(controller.selected, Position(0, 4))
 
-    def test_reselection_after_capture_does_not_get_stuck_across_repeated_clicks(
+    def test_reselection_after_capture_can_be_toggled_across_repeated_clicks(
         self,
     ) -> None:
         controller, engine = _setup(["wR . bR . wN"])
@@ -328,10 +382,14 @@ class TestControllerSelectionIdentity(unittest.TestCase):
         engine.request_move(Position(0, 2), Position(0, 0))  # bR captures wR
         engine.wait(2000)
 
-        for _ in range(3):
-            result = controller.click(450, 50)  # click own knight at (0, 4)
-            self.assertEqual(result.action, "selected")
-            self.assertEqual(controller.selected, Position(0, 4))
+        first_result = controller.click(450, 50)  # select own knight at (0, 4)
+        second_result = controller.click(450, 50)  # cancel that selection
+        third_result = controller.click(450, 50)  # select it again
+
+        self.assertEqual(first_result.action, "selected")
+        self.assertEqual(second_result.action, "cancelled")
+        self.assertEqual(third_result.action, "selected")
+        self.assertEqual(controller.selected, Position(0, 4))
 
     def test_selection_works_immediately_after_rest_completion(self) -> None:
         controller, engine = _setup(["wR . ."])
