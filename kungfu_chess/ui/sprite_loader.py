@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -107,13 +108,25 @@ class SpriteLoader:
             raise ValueError(f"Missing 'graphics' metadata in {config_path}")
 
         frames_per_sec = graphics["frames_per_sec"]
-        if not isinstance(frames_per_sec, (int, float)) or frames_per_sec <= 0:
+        if (
+            isinstance(frames_per_sec, bool)
+            or not isinstance(frames_per_sec, (int, float))
+            or (
+                isinstance(frames_per_sec, float)
+                and not math.isfinite(frames_per_sec)
+            )
+            or frames_per_sec <= 0
+        ):
             raise ValueError(
                 f"'frames_per_sec' must be a positive number in {config_path}, "
                 f"got {frames_per_sec!r}"
             )
 
-        is_loop = bool(graphics["is_loop"])
+        is_loop = graphics["is_loop"]
+        if not isinstance(is_loop, bool):
+            raise ValueError(
+                f"'is_loop' must be a boolean in {config_path}, got {is_loop!r}"
+            )
 
         sprites_dir = state_dir / SPRITES_DIRECTORY_NAME
         frame_paths = SpriteLoader._sorted_frame_paths(sprites_dir)

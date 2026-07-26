@@ -99,8 +99,8 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         kind_color: str,
         state: str,
         frame_numbers: list[int],
-        frames_per_sec: float = 12,
-        is_loop: bool = True,
+        frames_per_sec: object = 12,
+        is_loop: object = True,
     ) -> None:
         state_dir = self.root / kind_color / "states" / state
         sprites_dir = state_dir / "sprites"
@@ -194,12 +194,135 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "graphics"):
             loader.get_animation_frame("P", "w", "move", 0)
 
-    def test_non_positive_frames_per_sec_raises_clear_error(self) -> None:
+    def test_boolean_frames_per_sec_values_are_rejected(self) -> None:
+        loader = SpriteLoader(self.root)
+
+        for index, value in enumerate((True, False)):
+            with self.subTest(frames_per_sec=value):
+                state = f"boolean_fps_{index}"
+                self._write_state("PW", state, [1], frames_per_sec=value)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"'frames_per_sec' must be a positive number",
+                ):
+                    loader.get_animation_frame("P", "w", state, 0)
+
+    def test_non_numeric_frames_per_sec_values_are_rejected(self) -> None:
+        loader = SpriteLoader(self.root)
+
+        for index, value in enumerate((None, "12", "fast", [], {})):
+            with self.subTest(frames_per_sec=value):
+                state = f"non_numeric_fps_{index}"
+                self._write_state("PW", state, [1], frames_per_sec=value)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"'frames_per_sec' must be a positive number",
+                ):
+                    loader.get_animation_frame("P", "w", state, 0)
+
+    def test_non_finite_frames_per_sec_values_are_rejected(self) -> None:
+        loader = SpriteLoader(self.root)
+
+        for index, value in enumerate(
+            (float("nan"), float("inf"), float("-inf"))
+        ):
+            with self.subTest(frames_per_sec=value):
+                state = f"non_finite_fps_{index}"
+                self._write_state("PW", state, [1], frames_per_sec=value)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"'frames_per_sec' must be a positive number",
+                ):
+                    loader.get_animation_frame("P", "w", state, 0)
+
+    def test_zero_frames_per_sec_is_rejected(self) -> None:
         self._write_state("PW", "move", [1], frames_per_sec=0)
         loader = SpriteLoader(self.root)
 
-        with self.assertRaisesRegex(ValueError, "frames_per_sec"):
+        with self.assertRaisesRegex(
+            ValueError,
+            r"'frames_per_sec' must be a positive number",
+        ):
             loader.get_animation_frame("P", "w", "move", 0)
+
+    def test_negative_frames_per_sec_is_rejected(self) -> None:
+        self._write_state("PW", "move", [1], frames_per_sec=-1)
+        loader = SpriteLoader(self.root)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"'frames_per_sec' must be a positive number",
+        ):
+            loader.get_animation_frame("P", "w", "move", 0)
+
+    def test_positive_integer_frames_per_sec_remains_supported(self) -> None:
+        self._write_state("PW", "move", [1], frames_per_sec=12)
+        loader = SpriteLoader(self.root)
+
+        with patch(
+            "kungfu_chess.ui.sprite_loader.select_frame_index",
+            return_value=0,
+        ) as mocked_select_frame_index:
+            loader.get_animation_frame("P", "w", "move", 0)
+
+        frames_per_sec = mocked_select_frame_index.call_args.args[1]
+        self.assertIs(type(frames_per_sec), int)
+        self.assertEqual(frames_per_sec, 12)
+
+    def test_positive_float_frames_per_sec_remains_supported(self) -> None:
+        self._write_state("PW", "move", [1], frames_per_sec=12.5)
+        loader = SpriteLoader(self.root)
+
+        with patch(
+            "kungfu_chess.ui.sprite_loader.select_frame_index",
+            return_value=0,
+        ) as mocked_select_frame_index:
+            loader.get_animation_frame("P", "w", "move", 0)
+
+        frames_per_sec = mocked_select_frame_index.call_args.args[1]
+        self.assertIs(type(frames_per_sec), float)
+        self.assertEqual(frames_per_sec, 12.5)
+
+    def test_non_boolean_is_loop_values_are_rejected(self) -> None:
+        loader = SpriteLoader(self.root)
+
+        for index, value in enumerate(("false", "true", 0, 1, None, [], {})):
+            with self.subTest(is_loop=value):
+                state = f"non_boolean_is_loop_{index}"
+                self._write_state("PW", state, [1], is_loop=value)
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    r"'is_loop' must be a boolean",
+                ):
+                    loader.get_animation_frame("P", "w", state, 0)
+
+    def test_true_is_loop_is_preserved_exactly(self) -> None:
+        self._write_state("PW", "move", [1], is_loop=True)
+        loader = SpriteLoader(self.root)
+
+        with patch(
+            "kungfu_chess.ui.sprite_loader.select_frame_index",
+            return_value=0,
+        ) as mocked_select_frame_index:
+            loader.get_animation_frame("P", "w", "move", 0)
+
+        self.assertIs(mocked_select_frame_index.call_args.args[3], True)
+
+    def test_false_is_loop_is_preserved_exactly(self) -> None:
+        self._write_state("PW", "move", [1], is_loop=False)
+        loader = SpriteLoader(self.root)
+
+        with patch(
+            "kungfu_chess.ui.sprite_loader.select_frame_index",
+            return_value=0,
+        ) as mocked_select_frame_index:
+            loader.get_animation_frame("P", "w", "move", 0)
+
+        self.assertIs(mocked_select_frame_index.call_args.args[3], False)
 
     def test_missing_sprite_frames_raises_clear_error(self) -> None:
         state_dir = self.root / "PW" / "states" / "move"
