@@ -2,7 +2,11 @@ import unittest
 
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.realtime.motion import Motion
-from kungfu_chess.realtime.rest import Rest
+from kungfu_chess.realtime.rest import (
+    DEFAULT_LONG_COOLDOWN_MS,
+    DEFAULT_SHORT_COOLDOWN_MS,
+    Rest,
+)
 from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 
@@ -360,12 +364,18 @@ class TestRealTimeArbiterCooldown(unittest.TestCase):
     def test_default_cooldown_durations_are_2000_and_10000(self) -> None:
         arbiter = RealTimeArbiter()
         arbiter.start_rest(self.piece, "short_rest")
-        self.assertEqual(arbiter.active_rests()[0].duration_ms, 2000)
+        self.assertEqual(
+            arbiter.active_rests()[0].duration_ms,
+            DEFAULT_SHORT_COOLDOWN_MS,
+        )
 
         other = Piece("wQ_0_0", "w", "Q", Position(0, 0))
         arbiter.start_rest(other, "long_rest")
         rests_by_id = {rest.piece_id: rest for rest in arbiter.active_rests()}
-        self.assertEqual(rests_by_id["wQ_0_0"].duration_ms, 10000)
+        self.assertEqual(
+            rests_by_id["wQ_0_0"].duration_ms,
+            DEFAULT_LONG_COOLDOWN_MS,
+        )
 
     def test_start_rest_marks_piece_busy_and_sets_state(self) -> None:
         self.arbiter.start_rest(self.piece, "long_rest")

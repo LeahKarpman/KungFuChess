@@ -12,6 +12,9 @@ from typing import Literal
 
 from ..model.piece import Piece
 
+DEFAULT_SHORT_COOLDOWN_MS = 2000
+DEFAULT_LONG_COOLDOWN_MS = 10000
+
 RestKind = Literal["short_rest", "long_rest"]
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
-from ..game_config import DEFAULT_LONG_COOLDOWN_MS, DEFAULT_SHORT_COOLDOWN_MS
 from ..model.piece import Piece
 from ..model.position import Position
 from .motion import (
@@ -14,7 +13,13 @@ from .motion import (
     Motion,
     travel_duration_ms,
 )
-from .rest import ActiveRest, Rest, RestKind
+from .rest import (
+    DEFAULT_LONG_COOLDOWN_MS,
+    DEFAULT_SHORT_COOLDOWN_MS,
+    ActiveRest,
+    Rest,
+    RestKind,
+)
 
 
 def _completion_priority(action_kind: ActionKind) -> int:
