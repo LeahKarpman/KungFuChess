@@ -61,15 +61,16 @@ class JumpCompleted:
 class PieceCaptured:
     """One piece removed another piece from the board.
 
-    captured_piece_kind/color are read from the live captured piece at the
-    moment of capture, not derived from captured_piece_id — a promoted
-    pawn keeps its original id but reports its current kind (e.g. "Q").
+    Captured kind/color and capturing color are read from the live pieces at
+    the moment of capture, not derived from either id — a promoted pawn keeps
+    its original id but reports its current kind (e.g. "Q").
     """
 
     captured_piece_id: str
     captured_piece_kind: str
     captured_piece_color: str
     by_piece_id: str
+    by_piece_color: str
     position: Position
 
 

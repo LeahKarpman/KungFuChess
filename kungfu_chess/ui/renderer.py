@@ -8,6 +8,7 @@ from ..model.position import Position
 from .animation import clamp_progress, lerp_point
 from .img import Img
 from .layout import BoardLayout
+from .presentation import GamePresentationSnapshot
 from .sprite_loader import SpriteLoader
 
 SELECTION_BORDER_COLOR = (
@@ -25,6 +26,18 @@ GAME_OVER_TEXT_COLOR = (255, 255, 255, 255)
 GAME_OVER_OUTLINE_THICKNESS = 8
 GAME_OVER_TEXT_THICKNESS = 3
 SUPPORTED_ACTION_KINDS = frozenset({"move", "jump"})
+HUD_HEIGHT = 210
+HUD_BACKGROUND_COLOR = (34, 34, 34, 255)
+HUD_TEXT_COLOR = (245, 245, 245, 255)
+HUD_HEADING_COLOR = (120, 210, 255, 255)
+HUD_MARGIN_X = 20
+HUD_COLUMN_GAP = 20
+HUD_SCORE_BASELINE = 32
+HUD_ACTIONS_BASELINE = 62
+HUD_FIRST_ENTRY_BASELINE = 91
+HUD_ENTRY_LINE_HEIGHT = 24
+HUD_FONT_SIZE = 0.65
+HUD_HEADING_FONT_SIZE = 0.72
 
 
 class BoardRenderer:
@@ -225,3 +238,84 @@ class BoardRenderer:
             SELECTION_BORDER_COLOR,
             SELECTION_BORDER_THICKNESS,
         )
+
+
+class GameRenderer:
+    """Compose the unchanged board frame with a score-and-actions HUD below it."""
+
+    def __init__(
+        self,
+        board_renderer: BoardRenderer,
+        image_factory: Callable[[], Img] = Img,
+    ) -> None:
+        self._board_renderer = board_renderer
+        self._image_factory = image_factory
+
+    def render(
+        self,
+        snapshot: GameSnapshot,
+        selected: Position | None,
+        presentation: GamePresentationSnapshot,
+    ) -> Img:
+        """Return the board at (0, 0) followed by a visible two-column HUD."""
+        board_frame = self._board_renderer.render(snapshot, selected)
+        board_height, board_width = board_frame.pixels.shape[:2]
+        canvas = self._image_factory().create(
+            board_width,
+            board_height + HUD_HEIGHT,
+            HUD_BACKGROUND_COLOR,
+        )
+        board_frame.draw_on(canvas, 0, 0)
+        self._draw_hud(canvas, board_width, board_height, presentation)
+        return canvas
+
+    @staticmethod
+    def _draw_hud(
+        canvas: Img,
+        board_width: int,
+        board_height: int,
+        presentation: GamePresentationSnapshot,
+    ) -> None:
+        column_width = (board_width - HUD_COLUMN_GAP) // 2
+        columns = (
+            (
+                HUD_MARGIN_X,
+                "White",
+                presentation.white_score,
+                presentation.white_actions,
+            ),
+            (
+                column_width + HUD_COLUMN_GAP,
+                "Black",
+                presentation.black_score,
+                presentation.black_actions,
+            ),
+        )
+        for x, color_name, score, actions in columns:
+            canvas.put_text(
+                f"{color_name} score: {score}",
+                x,
+                board_height + HUD_SCORE_BASELINE,
+                HUD_HEADING_FONT_SIZE,
+                color=HUD_HEADING_COLOR,
+                thickness=2,
+            )
+            canvas.put_text(
+                f"Recent {color_name} actions:",
+                x,
+                board_height + HUD_ACTIONS_BASELINE,
+                HUD_FONT_SIZE,
+                color=HUD_TEXT_COLOR,
+                thickness=1,
+            )
+            for index, entry in enumerate(actions):
+                canvas.put_text(
+                    entry.notation,
+                    x,
+                    board_height
+                    + HUD_FIRST_ENTRY_BASELINE
+                    + index * HUD_ENTRY_LINE_HEIGHT,
+                    HUD_FONT_SIZE,
+                    color=HUD_TEXT_COLOR,
+                    thickness=1,
+                )

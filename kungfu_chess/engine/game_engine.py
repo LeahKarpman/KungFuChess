@@ -293,6 +293,7 @@ class GameEngine:
                 captured_piece_kind=target.kind,
                 captured_piece_color=target.color,
                 by_piece_id=capturing_piece.id,
+                by_piece_color=capturing_piece.color,
                 position=position,
             )
         )
