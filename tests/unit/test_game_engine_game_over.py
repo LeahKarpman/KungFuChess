@@ -122,9 +122,9 @@ class TestGameOverHardening(unittest.TestCase):
 
         self.assertTrue(engine.game_over)
         self.assertIsNone(board.get_piece(Position(1, 3)))
-        # The knight's same-millisecond boundary was processed first, so it
-        # reached its first route cell before the later rook ended the game.
-        knight = board.get_piece(Position(0, 4))
+        # The knight advanced to its first visual waypoint at the same
+        # millisecond, but its authoritative occupied cell remains its source.
+        knight = board.get_piece(Position(0, 5))
         self.assertIsNotNone(knight)
         self.assertEqual(knight.state, "moving")
 

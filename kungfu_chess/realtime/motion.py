@@ -22,10 +22,11 @@ def calculate_route(
     source: Position,
     destination: Position,
 ) -> tuple[Position, ...]:
-    """Return the ordered board cells crossed by one legal move.
+    """Return the ordered visual waypoints for one legal move.
 
     This function describes timing geometry only. The rules layer remains
-    responsible for deciding whether the requested move is legal.
+    responsible for deciding whether the requested move is legal, and Motion
+    separately decides which waypoint boundaries require board resolution.
     """
     dr = destination.row - source.row
     dc = destination.col - source.col
@@ -94,6 +95,7 @@ class Motion:
     sequence: int = 0
     route: tuple[Position, ...] = ()
     current_cell: Position | None = None
+    current_waypoint: Position | None = None
     route_index: int = 0
     segment_elapsed_ms: int = 0
 
@@ -116,6 +118,8 @@ class Motion:
             raise ValueError("Motion route must contain at least one cell")
         if self.current_cell is None:
             self.current_cell = self.source
+        if self.current_waypoint is None:
+            self.current_waypoint = self.source
 
     @property
     def origin(self) -> Position:
@@ -129,7 +133,12 @@ class Motion:
 
     @property
     def next_cell(self) -> Position:
-        """Return the route cell at the pending boundary."""
+        """Backward-compatible alias for the next visual waypoint."""
+        return self.next_waypoint
+
+    @property
+    def next_waypoint(self) -> Position:
+        """Return the visual route point at the pending boundary."""
         return self.route[self.route_index]
 
     def segment_duration_ms(self) -> int:
@@ -157,16 +166,28 @@ class Motion:
     def is_final_boundary(self) -> bool:
         return self.route_index == len(self.route) - 1
 
-    def accept_boundary(self) -> bool:
-        """Commit current progress after GameEngine accepts entry.
+    def requires_board_resolution(self) -> bool:
+        """Return whether the pending visual boundary can change board occupancy."""
+        return (
+            self.action_kind != "move"
+            or self.piece.kind != "N"
+            or self.is_final_boundary()
+        )
 
-        Returns True at the final route cell. Otherwise prepares the next
-        one-cell segment while preserving the whole action's source.
+    def accept_boundary(self, update_occupied_cell: bool = True) -> bool:
+        """Commit progress at the pending visual boundary.
+
+        Sliding-piece and pawn boundaries update both the visual waypoint and
+        occupied cell after GameEngine resolves the board step. Knight transit
+        boundaries update only the visual waypoint. Returns True at the final
+        route point; otherwise prepares the next visual segment.
         """
         if not self.is_waiting_at_boundary():
             return False
 
-        self.current_cell = self.next_cell
+        self.current_waypoint = self.next_waypoint
+        if update_occupied_cell:
+            self.current_cell = self.next_waypoint
         if self.is_final_boundary():
             return True
 

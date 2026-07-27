@@ -110,12 +110,13 @@ class RealTimeArbiter:
     def advance_time(self, ms: int) -> list[ArrivalEvent]:
         """Advance every action and rest, returning arrival events in resolution order.
 
-        A motion that reaches a cell boundary is reported here but left in place
-        — still busy, still returned by active_actions — until the caller
-        acknowledges it via resolve_arrival. This lets a caller that cannot
-        yet apply a given arrival (GameOver was decided by an earlier
-        arrival in the same batch) leave it validly represented instead of
-        finalizing it and then discarding the outcome.
+        A boundary that can change board occupancy is reported here but left
+        in place — still busy, still returned by active_actions — until the
+        caller acknowledges it via resolve_arrival. Knight transit waypoints
+        advance internally because they are visual/timing boundaries only.
+        This lets a caller that cannot yet apply a board arrival (GameOver was
+        decided by an earlier arrival in the same batch) leave it validly
+        represented instead of finalizing it and then discarding the outcome.
 
         A motion already at a boundary when this call starts is skipped
         entirely — inert until resolve_arrival is called. Otherwise it
@@ -139,6 +140,11 @@ class RealTimeArbiter:
             if not motion.is_waiting_at_boundary():
                 continue
 
+            if not motion.requires_board_resolution():
+                motion.accept_boundary(update_occupied_cell=False)
+                continue
+
+            assert motion.current_cell is not None
             completed.append(
                 (
                     remaining_ms,
@@ -147,7 +153,7 @@ class RealTimeArbiter:
                     ArrivalEvent(
                         piece=motion.piece,
                         source=motion.current_cell,
-                        destination=motion.next_cell,
+                        destination=motion.next_waypoint,
                         action_kind=motion.action_kind,
                         leftover_ms=ms - remaining_ms,
                         original_source=motion.origin,
@@ -280,14 +286,14 @@ class RealTimeArbiter:
     @staticmethod
     def _to_active_action(motion: Motion) -> ActiveAction:
         """Convert an internal Motion into its immutable external view."""
-        assert motion.current_cell is not None
+        assert motion.current_waypoint is not None
         return ActiveAction(
             piece_id=motion.piece.id,
             piece_color=motion.piece.color,
             piece_kind=motion.piece.kind,
             action_kind=motion.action_kind,
-            source=motion.current_cell,
-            destination=motion.next_cell,
+            source=motion.current_waypoint,
+            destination=motion.next_waypoint,
             duration_ms=motion.segment_duration_ms(),
             elapsed_ms=motion.segment_elapsed_ms,
             action_elapsed_ms=motion.elapsed_ms,
