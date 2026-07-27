@@ -302,3 +302,77 @@ class TestPerCellCrossingCollisions(unittest.TestCase):
         self.assertEqual(first.state, "captured")
         self.assertIs(board.get_piece(Position(0, 1)), second)
         self.assertEqual(second.state, "long_rest")
+
+
+class TestKnightDestinationCollisions(unittest.TestCase):
+    """Verify that only a knight's final route boundary resolves on the board."""
+
+    def test_friendly_destination_occupant_keeps_knight_at_original_cell(
+        self,
+    ) -> None:
+        engine, board = _engine(
+            [
+                "wN . .",
+                ". . .",
+                ". . wR",
+            ]
+        )
+        knight = board.get_piece(Position(0, 0))
+        rook = board.get_piece(Position(2, 2))
+        engine.request_move(Position(0, 0), Position(2, 1))
+        engine.request_move(Position(2, 2), Position(2, 1))
+
+        engine.wait(1000)
+        engine.consume_events()
+        engine.wait(2000)
+
+        self.assertIs(board.get_piece(Position(0, 0)), knight)
+        self.assertIs(board.get_piece(Position(2, 1)), rook)
+        self.assertEqual(knight.state, "long_rest")
+        self.assertEqual(
+            engine.consume_events(),
+            (
+                MoveCompleted(
+                    piece_id=knight.id,
+                    piece_kind="N",
+                    piece_color="w",
+                    source=Position(0, 0),
+                    destination=Position(0, 0),
+                ),
+                RestStarted(
+                    piece_id=knight.id,
+                    rest_kind="long_rest",
+                    duration_ms=10000,
+                ),
+            ),
+        )
+
+    def test_enemy_at_final_destination_is_captured(self) -> None:
+        engine, board = _engine(
+            [
+                "wN .",
+                ". .",
+                ". bR",
+            ]
+        )
+        knight = board.get_piece(Position(0, 0))
+        enemy = board.get_piece(Position(2, 1))
+        engine.request_move(Position(0, 0), Position(2, 1))
+        engine.consume_events()
+
+        engine.wait(3000)
+        events = engine.consume_events()
+
+        self.assertEqual(enemy.state, "captured")
+        self.assertIs(board.get_piece(Position(2, 1)), knight)
+        self.assertIn(
+            PieceCaptured(
+                captured_piece_id=enemy.id,
+                captured_piece_kind="R",
+                captured_piece_color="b",
+                by_piece_id=knight.id,
+                position=Position(2, 1),
+            ),
+            events,
+        )
+        self.assertEqual(knight.state, "long_rest")

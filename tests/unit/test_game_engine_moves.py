@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.board import Board
-from kungfu_chess.model.events import MoveCompleted, RestStarted
+from kungfu_chess.model.events import MoveCompleted, PieceCaptured, RestStarted
 from kungfu_chess.model.position import Position
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.rules.rule_engine import MoveValidation, RuleEngine
@@ -264,3 +264,71 @@ class TestMoveCompletion(unittest.TestCase):
                 ),
             ),
         )
+
+    def test_knight_ignores_friendly_pieces_on_visual_waypoints(self) -> None:
+        engine, board = _engine(
+            [
+                "wN .",
+                "wP .",
+                "wP .",
+            ]
+        )
+        knight = board.get_piece(Position(0, 0))
+        first_blocker = board.get_piece(Position(1, 0))
+        second_blocker = board.get_piece(Position(2, 0))
+        engine.request_move(Position(0, 0), Position(2, 1))
+        engine.consume_events()
+
+        engine.wait(1000)
+        first_transit = engine.snapshot()
+
+        self.assertIs(board.get_piece(Position(0, 0)), knight)
+        self.assertIs(board.get_piece(Position(1, 0)), first_blocker)
+        self.assertEqual(first_transit.motions[0].source, Position(1, 0))
+        self.assertEqual(first_transit.motions[0].destination, Position(2, 0))
+        self.assertEqual(engine.consume_events(), ())
+        self.assertEqual(first_transit.rests, ())
+
+        engine.wait(1000)
+        second_transit = engine.snapshot()
+
+        self.assertIs(board.get_piece(Position(0, 0)), knight)
+        self.assertIs(board.get_piece(Position(2, 0)), second_blocker)
+        self.assertEqual(second_transit.motions[0].source, Position(2, 0))
+        self.assertEqual(second_transit.motions[0].destination, Position(2, 1))
+        self.assertEqual(second_transit.motions[0].action_elapsed_ms, 2000)
+        self.assertEqual(engine.consume_events(), ())
+
+        engine.wait(999)
+        self.assertIs(board.get_piece(Position(0, 0)), knight)
+        self.assertEqual(engine.consume_events(), ())
+
+        engine.wait(1)
+
+        self.assertIsNone(board.get_piece(Position(0, 0)))
+        self.assertIs(board.get_piece(Position(2, 1)), knight)
+        self.assertEqual(knight.state, "long_rest")
+
+    def test_knight_does_not_capture_enemies_on_visual_waypoints(self) -> None:
+        engine, board = _engine(
+            [
+                "wN .",
+                "bP .",
+                "bP .",
+            ]
+        )
+        knight = board.get_piece(Position(0, 0))
+        first_enemy = board.get_piece(Position(1, 0))
+        second_enemy = board.get_piece(Position(2, 0))
+        engine.request_move(Position(0, 0), Position(2, 1))
+        engine.consume_events()
+
+        engine.wait(3000)
+        events = engine.consume_events()
+
+        self.assertIs(board.get_piece(Position(1, 0)), first_enemy)
+        self.assertIs(board.get_piece(Position(2, 0)), second_enemy)
+        self.assertIs(board.get_piece(Position(2, 1)), knight)
+        self.assertNotEqual(first_enemy.state, "captured")
+        self.assertNotEqual(second_enemy.state, "captured")
+        self.assertFalse(any(isinstance(event, PieceCaptured) for event in events))

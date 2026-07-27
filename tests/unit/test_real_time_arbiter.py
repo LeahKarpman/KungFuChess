@@ -91,24 +91,57 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.assertEqual(second[0].destination, Position(0, 2))
         self.assertTrue(second[0].is_final)
 
-    def test_knight_move_reports_three_axis_ordered_boundaries(self) -> None:
-        """Measure a knight's L-shaped route as three cell transitions."""
+    def test_knight_transit_advances_visual_segments_but_emits_only_final_arrival(
+        self,
+    ) -> None:
         source = Position(0, 0)
         destination = Position(2, 1)
         knight = Piece("wN_0_0", "w", "N", source)
         self.arbiter.start_motion(knight, source, destination)
 
-        destinations = []
-        for _ in range(3):
-            event = self.arbiter.advance_time(1000)[0]
-            destinations.append(event.destination)
-            self.arbiter.resolve_arrival(knight.id)
+        first_segment = self.arbiter.active_actions()[0]
+        self.assertEqual(first_segment.source, Position(0, 0))
+        self.assertEqual(first_segment.destination, Position(1, 0))
+
+        self.assertEqual(self.arbiter.advance_time(1000), [])
+        second_segment = self.arbiter.active_actions()[0]
+        self.assertEqual(second_segment.source, Position(1, 0))
+        self.assertEqual(second_segment.destination, Position(2, 0))
+        self.assertEqual(second_segment.action_elapsed_ms, 1000)
+
+        self.assertEqual(self.arbiter.advance_time(1000), [])
+        final_segment = self.arbiter.active_actions()[0]
+        self.assertEqual(final_segment.source, Position(2, 0))
+        self.assertEqual(final_segment.destination, destination)
+        self.assertEqual(final_segment.action_elapsed_ms, 2000)
+
+        events = self.arbiter.advance_time(1000)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].source, source)
+        self.assertEqual(events[0].destination, destination)
+        self.assertTrue(events[0].is_final)
+        self.assertEqual(self.arbiter.active_actions()[0].action_elapsed_ms, 3000)
+
+        self.arbiter.resolve_arrival(knight.id)
+        self.assertFalse(self.arbiter.is_piece_busy(knight.id))
+
+    def test_knight_final_arrival_keeps_sequence_order_against_same_time_move(
+        self,
+    ) -> None:
+        knight = Piece("wN_0_0", "w", "N", Position(0, 0))
+        rook = Piece("bR_3_0", "b", "R", Position(3, 0))
+        self.arbiter.start_motion(knight, Position(0, 0), Position(2, 1))
+        self.assertEqual(self.arbiter.advance_time(1000), [])
+        self.assertEqual(self.arbiter.advance_time(1000), [])
+        self.arbiter.start_motion(rook, Position(3, 0), Position(3, 1))
+
+        events = self.arbiter.advance_time(1000)
 
         self.assertEqual(
-            destinations,
-            [Position(1, 0), Position(2, 0), Position(2, 1)],
+            [event.piece.id for event in events],
+            [knight.id, rook.id],
         )
-        self.assertFalse(self.arbiter.is_piece_busy(knight.id))
 
     def test_multiple_waits_accumulate(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
