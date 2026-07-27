@@ -28,6 +28,7 @@ class MotionSnapshot:
     elapsed_ms: int
     duration_ms: int
     action_kind: Literal["move", "jump"] = "move"
+    action_elapsed_ms: int | None = None
 
 
 @dataclass(frozen=True)

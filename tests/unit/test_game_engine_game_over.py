@@ -122,14 +122,19 @@ class TestGameOverHardening(unittest.TestCase):
 
         self.assertTrue(engine.game_over)
         self.assertIsNone(board.get_piece(Position(1, 3)))
-        knight = board.get_piece(Position(0, 5))
+        # The knight's same-millisecond boundary was processed first, so it
+        # reached its first route cell before the later rook ended the game.
+        knight = board.get_piece(Position(0, 4))
         self.assertIsNotNone(knight)
         self.assertEqual(knight.state, "moving")
 
         motions = {m.piece_id: m for m in engine.snapshot().motions}
         self.assertIn(knight.id, motions)
-        self.assertEqual(motions[knight.id].elapsed_ms, 1000)
-        self.assertEqual(motions[knight.id].duration_ms, 3000)
+        self.assertEqual(motions[knight.id].source, Position(0, 4))
+        self.assertEqual(motions[knight.id].destination, Position(0, 3))
+        self.assertEqual(motions[knight.id].elapsed_ms, 0)
+        self.assertEqual(motions[knight.id].duration_ms, 1000)
+        self.assertEqual(motions[knight.id].action_elapsed_ms, 1000)
 
     def test_large_wait_stops_at_boundary_unused_rest_time_is_discarded(self) -> None:
         """Same guarantee for an already-active rest: its cooldown must not

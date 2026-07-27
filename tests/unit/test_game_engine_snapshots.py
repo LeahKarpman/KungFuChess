@@ -88,6 +88,22 @@ class TestGameEngineSnapshots(unittest.TestCase):
         self.assertEqual(len(piece_ids), len(set(piece_ids)))
         self.assertEqual(motion_ids, {"wR_0_0", "wK_1_1"})
 
+    def test_snapshot_exposes_current_segment_and_total_action_elapsed(self) -> None:
+        engine, _ = _engine(["wR . . ."])
+        engine.request_move(Position(0, 0), Position(0, 3))
+
+        engine.wait(1500)
+        snapshot = engine.snapshot()
+        piece = snapshot.pieces[0]
+        motion = snapshot.motions[0]
+
+        self.assertEqual(piece.cell, Position(0, 1))
+        self.assertEqual(motion.source, Position(0, 1))
+        self.assertEqual(motion.destination, Position(0, 2))
+        self.assertEqual(motion.elapsed_ms, 500)
+        self.assertEqual(motion.duration_ms, 1000)
+        self.assertEqual(motion.action_elapsed_ms, 1500)
+
     def test_snapshot_and_nested_piece_views_are_immutable(self) -> None:
         engine, _ = _engine(["wR . ."])
         snapshot = engine.snapshot()

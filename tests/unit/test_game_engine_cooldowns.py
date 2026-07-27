@@ -326,8 +326,8 @@ class TestCooldownCaptures(unittest.TestCase):
         engine, board = _engine(["wR . . .", "bR . . ."])
         captured_mover = board.get_piece(Position(0, 0))
 
-        engine.request_move(Position(0, 0), Position(0, 3))
         engine.request_move(Position(1, 0), Position(0, 0))
+        engine.request_move(Position(0, 0), Position(0, 3))
 
         engine.wait(1000)
 
