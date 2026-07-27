@@ -57,11 +57,12 @@ def run_loop(
     clock and poll_key are injectable so the loop can be exercised deterministically
     in tests; the real UI always calls this with their default implementations.
     """
-    Img.set_mouse_callbacks(WINDOW_TITLE, controller.click, controller.jump)
-
-    last_time = clock()
-    fractional_elapsed_ms = 0.0
     try:
+        Img.set_mouse_callbacks(WINDOW_TITLE, controller.click, controller.jump)
+
+        last_time = clock()
+        fractional_elapsed_ms = 0.0
+
         while True:
             now = clock()
             total_elapsed_ms = (now - last_time) * 1000 + fractional_elapsed_ms
@@ -80,7 +81,6 @@ def run_loop(
                 break
     finally:
         Img.close_all_windows()
-        # TODO : Consider adding a way to cleanly shut down the engine and renderer, if needed.
 
 
 def main() -> None:
