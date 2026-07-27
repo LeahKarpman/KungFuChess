@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 from ..engine.game_engine import GameEngine
 from ..game_config import load_game_config
@@ -25,6 +26,19 @@ _PACKAGE_ROOT = _UI_ROOT.parent
 _ASSETS_ROOT = _UI_ROOT / "assets"
 _STANDARD_BOARD_PATH = _PACKAGE_ROOT / "resources" / "boards" / "standard_board.txt"
 _GAME_CONFIG_PATH = _PACKAGE_ROOT / "resources" / "game_config.json"
+
+
+class WindowOperations(Protocol):
+    def set_mouse_callbacks(
+        self,
+        window_name: str,
+        on_left_click: Callable[[int, int], object],
+        on_right_click: Callable[[int, int], object],
+    ) -> None: ...
+
+    def is_window_open(self, window_name: str) -> bool: ...
+
+    def close_all_windows(self) -> None: ...
 
 
 def _build_standard_engine() -> GameEngine:
@@ -51,6 +65,7 @@ def run_loop(
     controller: Controller,
     clock: Callable[[], float] = time.perf_counter,
     poll_key: Callable[[int], int] = Img.poll_key,
+    window: WindowOperations = Img(),
 ) -> None:
     """Advance and render until the window closes or an exit key is pressed.
 
@@ -58,7 +73,7 @@ def run_loop(
     in tests; the real UI always calls this with their default implementations.
     """
     try:
-        Img.set_mouse_callbacks(WINDOW_TITLE, controller.click, controller.jump)
+        window.set_mouse_callbacks(WINDOW_TITLE, controller.click, controller.jump)
 
         last_time = clock()
         fractional_elapsed_ms = 0.0
@@ -77,17 +92,20 @@ def run_loop(
 
             key = poll_key(POLL_DELAY_MS)
             _ = engine.consume_events()
-            if key in _EXIT_KEYS or not Img.is_window_open(WINDOW_TITLE):
+            if key in _EXIT_KEYS or not window.is_window_open(WINDOW_TITLE):
                 break
     finally:
-        Img.close_all_windows()
+        window.close_all_windows()
 
 
-def main() -> None:
-    """Run the persistent real-time window until the user closes it."""
-    engine = _build_standard_engine()
-    layout = BoardLayout(cell_size=DEFAULT_CELL_SIZE)
-    renderer = _build_renderer(layout)
+def run_game(
+    engine: GameEngine,
+    renderer: BoardRenderer,
+    layout: BoardLayout,
+    controller_factory: Callable[[BoardMapper, GameEngine], Controller] = Controller,
+    loop: Callable[[GameEngine, BoardRenderer, Controller], None] = run_loop,
+) -> None:
+    """Wire input geometry to an existing game and run its persistent window."""
     snapshot = engine.snapshot()
     mapper = BoardMapper(
         snapshot.width,
@@ -96,5 +114,13 @@ def main() -> None:
         origin_x=layout.origin_x,
         origin_y=layout.origin_y,
     )
-    controller = Controller(mapper, engine)
-    run_loop(engine, renderer, controller)
+    controller = controller_factory(mapper, engine)
+    loop(engine, renderer, controller)
+
+
+def main() -> None:
+    """Run the persistent real-time window until the user closes it."""
+    engine = _build_standard_engine()
+    layout = BoardLayout(cell_size=DEFAULT_CELL_SIZE)
+    renderer = _build_renderer(layout)
+    run_game(engine, renderer, layout)

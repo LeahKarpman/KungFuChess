@@ -1,11 +1,12 @@
 """Move-legality orchestration built on top of the piece movement rules."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ..model.board import Board
 from ..model.position import Position
-from .piece_rules import destination_rule_for
+from .piece_rules import DestinationRule, destination_rule_for
 
 
 @dataclass(frozen=True)
@@ -27,12 +28,18 @@ class JumpValidation:
 class RuleEngine:
     """Answer move- and jump-legality queries; never mutates board or piece state."""
 
+    def __init__(
+        self,
+        destination_rule_resolver: Callable[[str], DestinationRule | None] = destination_rule_for,
+    ) -> None:
+        self._destination_rule_resolver = destination_rule_resolver
+
     def legal_destinations(self, board: Board, src: Position) -> set[Position]:
         """Return the legal destinations for the piece at src, or empty if there is none."""
         piece = board.get_piece(src)
         if not piece:
             return set()
-        rule = destination_rule_for(piece.kind)
+        rule = self._destination_rule_resolver(piece.kind)
         return rule(board, src) if rule else set()
 
     def validate_move(

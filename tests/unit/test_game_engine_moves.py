@@ -1,7 +1,6 @@
 # pyright: reportOptionalMemberAccess=false
 
 import unittest
-from unittest.mock import MagicMock
 
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.io.board_parser import parse_board
@@ -26,6 +25,26 @@ class _FalseyRuleEngine(RuleEngine):
         dst: Position,
     ) -> MoveValidation:
         return MoveValidation(ok=False, reason="injected_rule_engine")
+
+
+class _FailingMoveRules:
+    def validate_move(self, board, src, dst):
+        raise AssertionError("validate_move must not be called")
+
+
+class _RecordingArbiter:
+    def __init__(self) -> None:
+        self.advance_time_calls: list[int] = []
+
+    def next_boundary_ms(self):
+        return None
+
+    def advance_time(self, elapsed_ms: int):
+        self.advance_time_calls.append(elapsed_ms)
+        return []
+
+    def consume_completed_rest_piece_ids(self):
+        return ()
 
 
 class _FalseyArbiter(RealTimeArbiter):
@@ -130,11 +149,10 @@ class TestMoveRequests(unittest.TestCase):
         self.assertEqual(engine.consume_events(), ())
 
     def test_game_over_checked_before_rule_engine(self) -> None:
-        mock_rules = MagicMock(spec=RuleEngine)
         board = parse_board([". wR ."])
         engine = GameEngine(
             board,
-            mock_rules,
+            _FailingMoveRules(),
             RealTimeArbiter(),
         )
         engine._game_over = True
@@ -145,7 +163,6 @@ class TestMoveRequests(unittest.TestCase):
         )
 
         self.assertEqual(result.reason, "game_over")
-        mock_rules.validate_move.assert_not_called()
 
     def test_busy_piece_rejects_second_move(self) -> None:
         engine, _ = _engine([". wR . . ."])
@@ -163,19 +180,17 @@ class TestMoveRequests(unittest.TestCase):
         self.assertEqual(result.reason, "piece_busy")
 
     def test_wait_delegates_to_arbiter(self) -> None:
-        mock_arbiter = MagicMock(spec=RealTimeArbiter)
-        mock_arbiter.advance_time.return_value = []
-        mock_arbiter.next_boundary_ms.return_value = None
+        arbiter = _RecordingArbiter()
         board = parse_board([". wR ."])
         engine = GameEngine(
             board,
             RuleEngine(),
-            mock_arbiter,
+            arbiter,
         )
 
         engine.wait(500)
 
-        mock_arbiter.advance_time.assert_called_once_with(500)
+        self.assertEqual(arbiter.advance_time_calls, [500])
 
 
 class TestMoveCompletion(unittest.TestCase):

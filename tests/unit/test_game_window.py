@@ -1,52 +1,128 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock, patch
+from functools import partial
 
 from kungfu_chess.engine.game_engine import GameEngine
-from kungfu_chess.input.board_mapper import DEFAULT_CELL_SIZE
 from kungfu_chess.input.controller import Controller
+from kungfu_chess.model.game_state import GameSnapshot
 from kungfu_chess.model.position import Position
-from kungfu_chess.ui.game_window import main, run_loop
-from kungfu_chess.ui.img import Img
+from kungfu_chess.ui.game_window import _build_renderer, run_game, run_loop
 from kungfu_chess.ui.layout import BoardLayout
 from kungfu_chess.ui.renderer import BoardRenderer
 
 
-def _make_engine_and_renderer() -> tuple[MagicMock, MagicMock]:
-    engine = MagicMock(spec=GameEngine)
-    renderer = MagicMock(spec=BoardRenderer)
-    renderer.render.return_value = MagicMock()
-    return engine, renderer
+class FakeFrame:
+    def __init__(self) -> None:
+        self.show_frame_calls: list[str] = []
+
+    def show_frame(self, window_name: str) -> None:
+        self.show_frame_calls.append(window_name)
 
 
-def _make_controller(selected: Position | None = None) -> MagicMock:
-    controller = MagicMock(spec=Controller)
-    controller.selected = selected
-    return controller
+class FakeEngine:
+    def __init__(self, snapshot: object | None = None) -> None:
+        self.snapshot_value = snapshot if snapshot is not None else object()
+        self.wait_calls: list[int] = []
+        self.snapshot_calls = 0
+        self.consume_events_calls = 0
+        self.consume_events_hook = None
+
+    def wait(self, elapsed_ms: int) -> None:
+        self.wait_calls.append(elapsed_ms)
+
+    def snapshot(self):
+        self.snapshot_calls += 1
+        return self.snapshot_value
+
+    def consume_events(self):
+        self.consume_events_calls += 1
+        if self.consume_events_hook is not None:
+            return self.consume_events_hook()
+        return ()
+
+
+class FakeRenderer:
+    def __init__(self) -> None:
+        self.frame = FakeFrame()
+        self.render_calls: list[tuple[object, Position | None]] = []
+        self.render_error: Exception | None = None
+
+    def render(self, snapshot, selected):
+        self.render_calls.append((snapshot, selected))
+        if self.render_error is not None:
+            raise self.render_error
+        return self.frame
+
+
+class FakeController:
+    def __init__(self, selected: Position | None = None) -> None:
+        self.selected = selected
+        self.click_calls: list[tuple[int, int]] = []
+        self.jump_calls: list[tuple[int, int]] = []
+
+    def click(self, x: int, y: int) -> None:
+        self.click_calls.append((x, y))
+
+    def jump(self, x: int, y: int) -> None:
+        self.jump_calls.append((x, y))
+
+
+class SequencePollKey:
+    def __init__(self, values=()) -> None:
+        self._values = iter(values)
+        self.calls: list[int] = []
+
+    def __call__(self, delay_ms: int) -> int:
+        self.calls.append(delay_ms)
+        return next(self._values)
+
+
+def _make_engine_and_renderer() -> tuple[FakeEngine, FakeRenderer]:
+    return FakeEngine(), FakeRenderer()
+
+
+def _make_controller(selected: Position | None = None) -> FakeController:
+    return FakeController(selected)
+
+
+class FakeWindow:
+    def __init__(self) -> None:
+        self.callback_calls: list[tuple[str, object, object]] = []
+        self.is_open_calls: list[str] = []
+        self.open_results: list[bool] = []
+        self.close_calls = 0
+        self.callback_error: Exception | None = None
+
+    def set_mouse_callbacks(self, window_name, on_left_click, on_right_click) -> None:
+        if self.callback_error is not None:
+            raise self.callback_error
+        self.callback_calls.append((window_name, on_left_click, on_right_click))
+
+    def is_window_open(self, window_name: str) -> bool:
+        self.is_open_calls.append(window_name)
+        if self.open_results:
+            return self.open_results.pop(0)
+        return True
+
+    def close_all_windows(self) -> None:
+        self.close_calls += 1
 
 
 class TestRunLoop(unittest.TestCase):
     """Exercise the persistent window loop without opening a real OpenCV window."""
 
     def setUp(self) -> None:
-        close_patcher = patch.object(Img, "close_all_windows")
-        callback_patcher = patch.object(Img, "set_mouse_callbacks")
-        window_open_patcher = patch.object(Img, "is_window_open", return_value=True)
-        self.mock_close_all_windows = close_patcher.start()
-        self.mock_set_mouse_callbacks = callback_patcher.start()
-        self.mock_is_window_open = window_open_patcher.start()
-        self.addCleanup(close_patcher.stop)
-        self.addCleanup(callback_patcher.stop)
-        self.addCleanup(window_open_patcher.stop)
+        self.window = FakeWindow()
+        self.run_loop = partial(run_loop, window=self.window)
 
     def test_advances_engine_with_elapsed_milliseconds(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.5, 1.2])
-        poll_key = MagicMock(side_effect=[-1, 27])
+        poll_key = SequencePollKey([-1, 27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -55,7 +131,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(
-            [call.args[0] for call in engine.wait.call_args_list],
+            engine.wait_calls,
             [500, 700],
         )
 
@@ -63,9 +139,9 @@ class TestRunLoop(unittest.TestCase):
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.0004, 0.0008, 0.0012])
-        poll_key = MagicMock(side_effect=[-1, -1, 27])
+        poll_key = SequencePollKey([-1, -1, 27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -74,7 +150,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(
-            [call.args[0] for call in engine.wait.call_args_list],
+            engine.wait_calls,
             [0, 0, 1],
         )
 
@@ -83,9 +159,9 @@ class TestRunLoop(unittest.TestCase):
         controller = _make_controller()
         clock_values = [0.0, 1 / 60, 2 / 60, 3 / 60, 4 / 60]
         clock = iter(clock_values)
-        poll_key = MagicMock(side_effect=[-1, -1, -1, 27])
+        poll_key = SequencePollKey([-1, -1, -1, 27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -93,7 +169,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        delivered_ms = sum(call.args[0] for call in engine.wait.call_args_list)
+        delivered_ms = sum(engine.wait_calls)
         total_elapsed_ms = int((clock_values[-1] - clock_values[0]) * 1000)
         self.assertEqual(delivered_ms, total_elapsed_ms)
 
@@ -101,9 +177,9 @@ class TestRunLoop(unittest.TestCase):
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.0006, 0.0012, 0.0018, 0.0024])
-        poll_key = MagicMock(side_effect=[-1, -1, -1, 27])
+        poll_key = SequencePollKey([-1, -1, -1, 27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -112,7 +188,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(
-            [call.args[0] for call in engine.wait.call_args_list],
+            engine.wait_calls,
             [0, 1, 0, 1],
         )
 
@@ -120,9 +196,9 @@ class TestRunLoop(unittest.TestCase):
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1, 0.2, 0.3])
-        poll_key = MagicMock(side_effect=[-1, -1, 27])
+        poll_key = SequencePollKey([-1, -1, 27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -130,7 +206,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(engine.consume_events.call_count, 3)
+        self.assertEqual(engine.consume_events_calls, 3)
 
     def test_consumes_events_after_mouse_input_is_polled(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -138,17 +214,17 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1])
 
         def poll_key(delay_ms: int) -> int:
-            _, on_left_click, _ = self.mock_set_mouse_callbacks.call_args.args
+            _, on_left_click, _ = self.window.callback_calls[0]
             on_left_click(123, 456)
             return 27
 
         def consume_events() -> tuple[object, ...]:
-            controller.click.assert_called_once_with(123, 456)
+            self.assertEqual(controller.click_calls, [(123, 456)])
             return ()
 
-        engine.consume_events.side_effect = consume_events
+        engine.consume_events_hook = consume_events
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -156,15 +232,15 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        engine.consume_events.assert_called_once_with()
+        self.assertEqual(engine.consume_events_calls, 1)
 
     def test_exits_on_escape_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
-        poll_key = MagicMock(side_effect=[27])
+        poll_key = SequencePollKey([27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -172,17 +248,17 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.render.call_count, 1)
-        engine.consume_events.assert_called_once_with()
-        self.mock_close_all_windows.assert_called_once()
+        self.assertEqual(len(renderer.render_calls), 1)
+        self.assertEqual(engine.consume_events_calls, 1)
+        self.assertEqual(self.window.close_calls, 1)
 
     def test_exits_on_q_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
-        poll_key = MagicMock(side_effect=[ord("q")])
+        poll_key = SequencePollKey([ord("q")])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -190,17 +266,17 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.render.call_count, 1)
-        engine.consume_events.assert_called_once_with()
-        self.mock_close_all_windows.assert_called_once()
+        self.assertEqual(len(renderer.render_calls), 1)
+        self.assertEqual(engine.consume_events_calls, 1)
+        self.assertEqual(self.window.close_calls, 1)
 
     def test_exits_on_uppercase_q_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
-        poll_key = MagicMock(side_effect=[ord("Q")])
+        poll_key = SequencePollKey([ord("Q")])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -208,17 +284,17 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.render.call_count, 1)
-        engine.consume_events.assert_called_once_with()
-        self.mock_close_all_windows.assert_called_once()
+        self.assertEqual(len(renderer.render_calls), 1)
+        self.assertEqual(engine.consume_events_calls, 1)
+        self.assertEqual(self.window.close_calls, 1)
 
     def test_visible_window_keeps_loop_running(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1, 0.2])
-        poll_key = MagicMock(side_effect=[-1, 27])
+        poll_key = SequencePollKey([-1, 27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -226,18 +302,25 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.render.call_count, 2)
-        self.mock_is_window_open.assert_called_once_with("Kung-Fu Chess")
+        self.assertEqual(len(renderer.render_calls), 2)
+        self.assertEqual(self.window.is_open_calls, ["Kung-Fu Chess"])
 
     def test_game_over_frame_remains_visible_until_exit_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
-        game_over_snapshot = MagicMock(game_over=True)
-        engine.snapshot.return_value = game_over_snapshot
+        game_over_snapshot = GameSnapshot(
+            pieces=(),
+            motions=(),
+            rests=(),
+            game_over=True,
+            width=8,
+            height=8,
+        )
+        engine.snapshot_value = game_over_snapshot
         controller = _make_controller(selected=None)
         clock_values = iter([0.0, 0.1, 0.2])
-        poll_key = MagicMock(side_effect=[-1, ord("q")])
+        poll_key = SequencePollKey([-1, ord("q")])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -245,19 +328,19 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.render.call_count, 2)
-        renderer.render.assert_called_with(game_over_snapshot, None)
-        self.mock_is_window_open.assert_called_once_with("Kung-Fu Chess")
-        self.mock_close_all_windows.assert_called_once()
+        self.assertEqual(len(renderer.render_calls), 2)
+        self.assertEqual(renderer.render_calls[-1], (game_over_snapshot, None))
+        self.assertEqual(self.window.is_open_calls, ["Kung-Fu Chess"])
+        self.assertEqual(self.window.close_calls, 1)
 
     def test_exits_when_window_is_closed_with_x(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1, 0.2])
-        poll_key = MagicMock(side_effect=[-1, -1])
-        self.mock_is_window_open.side_effect = [True, False]
+        poll_key = SequencePollKey([-1, -1])
+        self.window.open_results = [True, False]
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -265,18 +348,20 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.render.call_count, 2)
-        self.assertEqual(engine.consume_events.call_count, 2)
-        self.assertEqual(self.mock_is_window_open.call_count, 2)
-        self.mock_close_all_windows.assert_called_once()
+        self.assertEqual(len(renderer.render_calls), 2)
+        self.assertEqual(engine.consume_events_calls, 2)
+        self.assertEqual(
+            self.window.is_open_calls, ["Kung-Fu Chess", "Kung-Fu Chess"]
+        )
+        self.assertEqual(self.window.close_calls, 1)
 
     def test_ignores_unrelated_keys_and_keeps_looping(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1, 0.2, 0.3])
-        poll_key = MagicMock(side_effect=[-1, ord("a"), 27])
+        poll_key = SequencePollKey([-1, ord("a"), 27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -284,17 +369,17 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.render.call_count, 3)
+        self.assertEqual(len(renderer.render_calls), 3)
 
     def test_cleanup_runs_even_if_render_raises(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
-        renderer.render.side_effect = RuntimeError("boom")
+        renderer.render_error = RuntimeError("boom")
         clock_values = iter([0.0, 0.1])
-        poll_key = MagicMock()
+        poll_key = SequencePollKey()
 
         with self.assertRaises(RuntimeError):
-            run_loop(
+            self.run_loop(
                 engine,
                 renderer,
                 controller,
@@ -302,18 +387,24 @@ class TestRunLoop(unittest.TestCase):
                 poll_key=poll_key,
             )
 
-        self.mock_close_all_windows.assert_called_once()
+        self.assertEqual(self.window.close_calls, 1)
 
     def test_cleanup_runs_if_mouse_callback_setup_raises(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         error = RuntimeError("callback setup failed")
-        self.mock_set_mouse_callbacks.side_effect = error
-        clock = MagicMock()
-        poll_key = MagicMock()
+        self.window.callback_error = error
+        clock_calls = 0
+
+        def clock():
+            nonlocal clock_calls
+            clock_calls += 1
+            return 0.0
+
+        poll_key = SequencePollKey()
 
         with self.assertRaises(RuntimeError) as raised:
-            run_loop(
+            self.run_loop(
                 engine,
                 renderer,
                 controller,
@@ -322,21 +413,25 @@ class TestRunLoop(unittest.TestCase):
             )
 
         self.assertIs(raised.exception, error)
-        self.mock_close_all_windows.assert_called_once()
-        engine.wait.assert_not_called()
-        engine.snapshot.assert_not_called()
-        renderer.render.assert_not_called()
-        poll_key.assert_not_called()
+        self.assertEqual(self.window.close_calls, 1)
+        self.assertEqual(clock_calls, 0)
+        self.assertEqual(engine.wait_calls, [])
+        self.assertEqual(engine.snapshot_calls, 0)
+        self.assertEqual(renderer.render_calls, [])
+        self.assertEqual(poll_key.calls, [])
 
     def test_cleanup_runs_if_initial_clock_raises(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         error = RuntimeError("initial clock failed")
-        clock = MagicMock(side_effect=error)
-        poll_key = MagicMock()
+
+        def clock():
+            raise error
+
+        poll_key = SequencePollKey()
 
         with self.assertRaises(RuntimeError) as raised:
-            run_loop(
+            self.run_loop(
                 engine,
                 renderer,
                 controller,
@@ -345,17 +440,17 @@ class TestRunLoop(unittest.TestCase):
             )
 
         self.assertIs(raised.exception, error)
-        self.mock_close_all_windows.assert_called_once()
-        engine.wait.assert_not_called()
-        renderer.render.assert_not_called()
+        self.assertEqual(self.window.close_calls, 1)
+        self.assertEqual(engine.wait_calls, [])
+        self.assertEqual(renderer.render_calls, [])
 
     def test_does_not_open_a_real_window(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
-        poll_key = MagicMock(side_effect=[27])
+        poll_key = SequencePollKey([27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -363,15 +458,15 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        renderer.render.return_value.show_frame.assert_called_once()
+        self.assertEqual(renderer.frame.show_frame_calls, ["Kung-Fu Chess"])
 
     def test_mouse_callback_installed_exactly_once(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1, 0.2, 0.3])
-        poll_key = MagicMock(side_effect=[-1, ord("a"), 27])
+        poll_key = SequencePollKey([-1, ord("a"), 27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -379,7 +474,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(self.mock_set_mouse_callbacks.call_count, 1)
+        self.assertEqual(len(self.window.callback_calls), 1)
 
     def test_installed_callback_delegates_exact_coordinates_to_controller_click(
         self,
@@ -387,9 +482,9 @@ class TestRunLoop(unittest.TestCase):
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
-        poll_key = MagicMock(side_effect=[27])
+        poll_key = SequencePollKey([27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -397,12 +492,10 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        _window_name, on_left_click, _on_right_click = (
-            self.mock_set_mouse_callbacks.call_args.args
-        )
+        _window_name, on_left_click, _on_right_click = self.window.callback_calls[0]
         on_left_click(123, 456)
 
-        controller.click.assert_called_once_with(123, 456)
+        self.assertEqual(controller.click_calls, [(123, 456)])
 
     def test_installed_callback_delegates_exact_coordinates_to_controller_jump(
         self,
@@ -410,9 +503,9 @@ class TestRunLoop(unittest.TestCase):
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
-        poll_key = MagicMock(side_effect=[27])
+        poll_key = SequencePollKey([27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -420,21 +513,19 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        _window_name, _on_left_click, on_right_click = (
-            self.mock_set_mouse_callbacks.call_args.args
-        )
+        _window_name, _on_left_click, on_right_click = self.window.callback_calls[0]
         on_right_click(123, 456)
 
-        controller.jump.assert_called_once_with(123, 456)
+        self.assertEqual(controller.jump_calls, [(123, 456)])
 
     def test_rendering_receives_current_controller_selected(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         selected = Position(2, 3)
         controller = _make_controller(selected=selected)
         clock_values = iter([0.0, 0.1])
-        poll_key = MagicMock(side_effect=[27])
+        poll_key = SequencePollKey([27])
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -442,7 +533,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        renderer.render.assert_called_once_with(engine.snapshot.return_value, selected)
+        self.assertEqual(renderer.render_calls, [(engine.snapshot_value, selected)])
 
     def test_next_frame_reflects_selection_change_from_a_click(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -450,14 +541,14 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1, 0.2])
 
         def poll_key(delay_ms: int) -> int:
-            if renderer.render.call_count == 1:
+            if len(renderer.render_calls) == 1:
                 controller.selected = Position(
                     0, 0
                 )  # simulate a click landing this frame
                 return -1
             return 27
 
-        run_loop(
+        self.run_loop(
             engine,
             renderer,
             controller,
@@ -465,8 +556,8 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        first_selected = renderer.render.call_args_list[0].args[1]
-        second_selected = renderer.render.call_args_list[1].args[1]
+        first_selected = renderer.render_calls[0][1]
+        second_selected = renderer.render_calls[1][1]
         self.assertIsNone(first_selected)
         self.assertEqual(second_selected, Position(0, 0))
 
@@ -474,28 +565,47 @@ class TestRunLoop(unittest.TestCase):
 class TestMainComposition(unittest.TestCase):
     def test_renderer_and_mapper_receive_the_same_board_geometry(self) -> None:
         layout = BoardLayout(cell_size=73, origin_x=11, origin_y=17)
-
-        with (
-            patch(
-                "kungfu_chess.ui.game_window.BoardLayout", return_value=layout
-            ) as layout_type,
-            patch("kungfu_chess.ui.game_window.SpriteLoader"),
-            patch("kungfu_chess.ui.game_window.BoardRenderer") as renderer_type,
-            patch("kungfu_chess.ui.game_window.BoardMapper") as mapper_type,
-            patch("kungfu_chess.ui.game_window.Controller"),
-            patch("kungfu_chess.ui.game_window.run_loop"),
-        ):
-            main()
-
-        layout_type.assert_called_once_with(cell_size=DEFAULT_CELL_SIZE)
-        self.assertIs(renderer_type.call_args.args[2], layout)
-        mapper_type.assert_called_once_with(
-            8,
-            8,
-            cell_size=layout.cell_size,
-            origin_x=layout.origin_x,
-            origin_y=layout.origin_y,
+        snapshot = GameSnapshot(
+            pieces=(),
+            motions=(),
+            rests=(),
+            game_over=False,
+            width=8,
+            height=8,
         )
+        engine = FakeEngine(snapshot)
+        renderer = _build_renderer(layout)
+        captured_mappers = []
+
+        def controller_factory(mapper, controller_engine):
+            captured_mappers.append(mapper)
+            return Controller(mapper, controller_engine)
+
+        loop_calls = []
+
+        def loop(loop_engine, loop_renderer, controller):
+            loop_calls.append((loop_engine, loop_renderer, controller))
+
+        run_game(
+            engine,
+            renderer,
+            layout,
+            controller_factory=controller_factory,
+            loop=loop,
+        )
+
+        mapper = captured_mappers[0]
+        sample_x = layout.origin_x + layout.cell_size // 2
+        sample_y = layout.origin_y + 3
+        self.assertEqual(mapper.pixel_to_cell(sample_x, sample_y), Position(0, 0))
+
+        baseline = renderer.render(snapshot)
+        selected = renderer.render(snapshot, selected=Position(0, 0))
+        self.assertFalse(
+            (baseline.pixels[sample_y, sample_x] == selected.pixels[sample_y, sample_x]).all()
+        )
+        self.assertIs(loop_calls[0][0], engine)
+        self.assertIs(loop_calls[0][1], renderer)
 
 
 if __name__ == "__main__":

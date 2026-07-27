@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from typing import TextIO
 
 from ..engine.game_engine import GameEngine
 from ..input.board_mapper import BoardMapper
@@ -12,7 +13,10 @@ from ..rules.rule_engine import RuleEngine
 from .script_parser import parse_script
 
 
-def run(lines: list[str]) -> None:
+def run(lines: list[str], output: TextIO | None = None) -> None:
+    if output is None:
+        output = sys.stdout
+
     commands = parse_script(lines)
     engine: GameEngine | None = None
     controller: Controller | None = None
@@ -22,7 +26,7 @@ def run(lines: list[str]) -> None:
             try:
                 board = parse_board(cmd[1])
             except ValueError as e:
-                sys.stdout.write("ERROR " + str(e) + "\n")
+                output.write("ERROR " + str(e) + "\n")
                 engine = None
                 controller = None
                 continue
@@ -33,7 +37,7 @@ def run(lines: list[str]) -> None:
             )
 
         elif cmd[0] == "print_board" and engine is not None:
-            sys.stdout.write(print_snapshot(engine.snapshot()) + "\n")
+            output.write(print_snapshot(engine.snapshot()) + "\n")
 
         elif cmd[0] == "click" and controller is not None:
             controller.click(cmd[1], cmd[2])

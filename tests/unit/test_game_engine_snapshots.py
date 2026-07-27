@@ -1,8 +1,6 @@
 import unittest
-from unittest.mock import MagicMock
 
 from kungfu_chess.engine.game_engine import GameEngine
-from kungfu_chess.model.board import Board
 from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
@@ -14,16 +12,25 @@ class TestGameEngineSnapshots(unittest.TestCase):
     """Verify snapshots use public board state and remain consistent and immutable."""
 
     def test_snapshot_reads_pieces_through_board_public_api(self) -> None:
-        board = MagicMock(spec=Board)
-        board.width = 2
-        board.height = 1
         piece = Piece(
             "wR_0_0",
             "w",
             "R",
             Position(0, 0),
         )
-        board.all_pieces.return_value = (piece,)
+
+        class PublicBoardFake:
+            width = 2
+            height = 1
+
+            def __init__(self) -> None:
+                self.all_pieces_calls = 0
+
+            def all_pieces(self):
+                self.all_pieces_calls += 1
+                return (piece,)
+
+        board = PublicBoardFake()
         engine = GameEngine(
             board,
             RuleEngine(),
@@ -32,7 +39,7 @@ class TestGameEngineSnapshots(unittest.TestCase):
 
         snapshot = engine.snapshot()
 
-        board.all_pieces.assert_called_once_with()
+        self.assertEqual(board.all_pieces_calls, 1)
         self.assertEqual(snapshot.pieces[0].id, piece.id)
 
     def test_snapshot_reports_motion_lifecycle(self) -> None:

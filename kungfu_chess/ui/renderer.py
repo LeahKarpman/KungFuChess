@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from ..model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot, RestSnapshot
@@ -40,12 +41,14 @@ class BoardRenderer:
         layout: BoardLayout,
         expected_width: int = 8,
         expected_height: int = 8,
+        image_factory: Callable[[], Img] = Img,
     ) -> None:
         self._board_image_path = Path(board_image_path)
         self._sprite_loader = sprite_loader
         self._layout = layout
         self._expected_width = expected_width
         self._expected_height = expected_height
+        self._image_factory = image_factory
         self._prepared_board: Img | None = None
 
     def _get_prepared_board(self) -> Img:
@@ -54,7 +57,9 @@ class BoardRenderer:
             pixel_size = self._layout.board_pixel_size(
                 self._expected_width, self._expected_height
             )
-            self._prepared_board = Img().read(self._board_image_path, size=pixel_size)
+            self._prepared_board = self._image_factory().read(
+                self._board_image_path, size=pixel_size
+            )
         return self._prepared_board
 
     def render(self, snapshot: GameSnapshot, selected: Position | None = None) -> Img:

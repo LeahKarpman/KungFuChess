@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, call, patch
+
+import numpy as np
 
 from kungfu_chess.model.game_state import (
     GameSnapshot,
@@ -15,7 +16,6 @@ from kungfu_chess.model.game_state import (
 from kungfu_chess.model.position import Position
 from kungfu_chess.ui import game_window
 from kungfu_chess.ui.img import Img
-from kungfu_chess.ui.img import cv2 as img_cv2
 from kungfu_chess.ui.layout import BoardLayout
 from kungfu_chess.ui.renderer import BoardRenderer
 from kungfu_chess.ui.sprite_loader import SpriteLoader
@@ -23,6 +23,93 @@ from kungfu_chess.ui.sprite_loader import SpriteLoader
 ASSETS_ROOT = Path(game_window.__file__).resolve().parent / "assets"
 BOARD_IMAGE_PATH = ASSETS_ROOT / "board.png"
 PIECES_ROOT = ASSETS_ROOT / "pieces2"
+
+
+class RecordingImage(Img):
+    def __init__(self, read_paths: list[Path]) -> None:
+        super().__init__()
+        self._read_paths = read_paths
+        self.text_calls: list[tuple[object, ...]] = []
+
+    def read(self, path, *args, **kwargs):
+        self._read_paths.append(Path(path))
+        return super().read(path, *args, **kwargs)
+
+    def copy(self) -> RecordingImage:
+        duplicate = RecordingImage(self._read_paths)
+        if self.img is not None:
+            duplicate.img = self.img.copy()
+        return duplicate
+
+    def put_text(
+        self,
+        txt,
+        x,
+        y,
+        font_size,
+        color=(255, 255, 255, 255),
+        thickness=1,
+    ):
+        self.text_calls.append((txt, x, y, font_size, color, thickness))
+        super().put_text(txt, x, y, font_size, color=color, thickness=thickness)
+
+
+class RecordingImageFactory:
+    def __init__(self) -> None:
+        self.read_paths: list[Path] = []
+
+    def __call__(self) -> RecordingImage:
+        return RecordingImage(self.read_paths)
+
+
+class RecordingSprite(Img):
+    def __init__(
+        self,
+        width: int = 64,
+        height: int = 64,
+        label: str = "sprite",
+        draw_order: list[str] | None = None,
+    ) -> None:
+        super().__init__()
+        self.img = np.zeros((height, width, 4), dtype=np.uint8)
+        self.label = label
+        self.draw_order = draw_order
+        self.draw_calls: list[tuple[Img, int, int]] = []
+
+    def draw_on(self, other_img, x, y):
+        self.draw_calls.append((other_img, x, y))
+        if self.draw_order is not None:
+            self.draw_order.append(self.label)
+
+
+class RecordingSpriteLoader:
+    def __init__(
+        self,
+        delegate: SpriteLoader | None = None,
+        idle_sprite: Img | None = None,
+        animation_sprite: Img | None = None,
+    ) -> None:
+        self.delegate = delegate
+        self.idle_sprite = idle_sprite
+        self.animation_sprite = animation_sprite
+        self.idle_calls: list[tuple[str, str]] = []
+        self.animation_calls: list[tuple[str, str, str, int]] = []
+
+    def load_idle_sprite(self, kind: str, color: str) -> Img:
+        self.idle_calls.append((kind, color))
+        if self.idle_sprite is not None:
+            return self.idle_sprite
+        assert self.delegate is not None
+        return self.delegate.load_idle_sprite(kind, color)
+
+    def get_animation_frame(
+        self, kind: str, color: str, state: str, elapsed_ms: int
+    ) -> Img:
+        self.animation_calls.append((kind, color, state, elapsed_ms))
+        if self.animation_sprite is not None:
+            return self.animation_sprite
+        assert self.delegate is not None
+        return self.delegate.get_animation_frame(kind, color, state, elapsed_ms)
 
 
 def _snapshot(
@@ -55,36 +142,50 @@ class TestBoardRenderer(unittest.TestCase):
         self.assertEqual((width, height), (800, 800))
 
     def test_game_over_message_drawn_when_snapshot_is_game_over(self) -> None:
-        with patch.object(Img, "put_text") as put_text:
-            self.renderer.render(_snapshot([], game_over=True))
-
-        put_text.assert_has_calls(
-            [
-                call(
-                    "GAME OVER",
-                    220,
-                    422,
-                    2.0,
-                    color=(0, 0, 0, 255),
-                    thickness=8,
-                ),
-                call(
-                    "GAME OVER",
-                    220,
-                    422,
-                    2.0,
-                    color=(255, 255, 255, 255),
-                    thickness=3,
-                ),
-            ]
+        image_factory = RecordingImageFactory()
+        renderer = BoardRenderer(
+            BOARD_IMAGE_PATH,
+            self.sprite_loader,
+            self.layout,
+            image_factory=image_factory,
         )
-        self.assertEqual(put_text.call_count, 2)
+
+        frame = renderer.render(_snapshot([], game_over=True))
+
+        self.assertEqual(
+            frame.text_calls,
+            [
+                (
+                    "GAME OVER",
+                    220,
+                    422,
+                    2.0,
+                    (0, 0, 0, 255),
+                    8,
+                ),
+                (
+                    "GAME OVER",
+                    220,
+                    422,
+                    2.0,
+                    (255, 255, 255, 255),
+                    3,
+                ),
+            ],
+        )
 
     def test_game_over_message_not_drawn_when_game_is_active(self) -> None:
-        with patch.object(Img, "put_text") as put_text:
-            self.renderer.render(_snapshot([], game_over=False))
+        image_factory = RecordingImageFactory()
+        renderer = BoardRenderer(
+            BOARD_IMAGE_PATH,
+            self.sprite_loader,
+            self.layout,
+            image_factory=image_factory,
+        )
 
-        put_text.assert_not_called()
+        frame = renderer.render(_snapshot([], game_over=False))
+
+        self.assertEqual(frame.text_calls, [])
 
     def test_single_piece_rendered_at_expected_cell(self) -> None:
         piece = PieceSnapshot(
@@ -137,17 +238,19 @@ class TestBoardRenderer(unittest.TestCase):
         self.assertEqual((snapshot.width, snapshot.height), (8, 8))
 
     def test_board_asset_is_not_reloaded_for_every_frame(self) -> None:
-        with patch.object(img_cv2, "imread", wraps=img_cv2.imread) as mocked_imread:
-            self.renderer.render(_snapshot([]))
-            self.renderer.render(_snapshot([]))
-            self.renderer.render(_snapshot([]))
+        image_factory = RecordingImageFactory()
+        renderer = BoardRenderer(
+            BOARD_IMAGE_PATH,
+            self.sprite_loader,
+            self.layout,
+            image_factory=image_factory,
+        )
 
-        board_reads = [
-            call
-            for call in mocked_imread.call_args_list
-            if call.args[0] == str(BOARD_IMAGE_PATH)
-        ]
-        self.assertEqual(len(board_reads), 1)
+        renderer.render(_snapshot([]))
+        renderer.render(_snapshot([]))
+        renderer.render(_snapshot([]))
+
+        self.assertEqual(image_factory.read_paths, [BOARD_IMAGE_PATH])
 
     def test_repeated_renders_do_not_accumulate_previous_pieces(self) -> None:
         piece = PieceSnapshot(
@@ -276,22 +379,18 @@ class TestBoardRendererMotion(unittest.TestCase):
                     action_kind="move",
                     action_elapsed_ms=elapsed_ms,
                 )
-                sprite = Mock()
-                sprite.pixels.shape = (64, 64, 4)
+                sprite = RecordingSprite()
+                loader = RecordingSpriteLoader(animation_sprite=sprite)
+                renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-                with patch.object(
-                    self.sprite_loader,
-                    "get_animation_frame",
-                    return_value=sprite,
-                ):
-                    self.renderer.render(_snapshot([piece], motions=[motion]))
+                renderer.render(_snapshot([piece], motions=[motion]))
 
                 expected_xy = self.layout.centered_top_left_at_point(
                     expected_center,
                     64,
                     64,
                 )
-                self.assertEqual(sprite.draw_on.call_args.args[1:], expected_xy)
+                self.assertEqual(sprite.draw_calls[0][1:], expected_xy)
 
     def test_move_motion_uses_move_animation_state(self) -> None:
         piece = PieceSnapshot(
@@ -306,14 +405,12 @@ class TestBoardRendererMotion(unittest.TestCase):
             action_kind="move",
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "get_animation_frame",
-            wraps=self.sprite_loader.get_animation_frame,
-        ) as spy:
-            self.renderer.render(_snapshot([piece], motions=[motion]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        spy.assert_called_once_with("P", "w", "move", 0)
+        renderer.render(_snapshot([piece], motions=[motion]))
+
+        self.assertEqual(loader.animation_calls, [("P", "w", "move", 0)])
 
     def test_segment_interpolation_keeps_total_elapsed_for_animation(self) -> None:
         piece = PieceSnapshot(
@@ -329,14 +426,12 @@ class TestBoardRendererMotion(unittest.TestCase):
             action_elapsed_ms=1500,
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "get_animation_frame",
-            wraps=self.sprite_loader.get_animation_frame,
-        ) as spy:
-            self.renderer.render(_snapshot([piece], motions=[motion]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        spy.assert_called_once_with("R", "w", "move", 1500)
+        renderer.render(_snapshot([piece], motions=[motion]))
+
+        self.assertEqual(loader.animation_calls, [("R", "w", "move", 1500)])
 
     def test_jump_motion_uses_jump_animation_state(self) -> None:
         piece = PieceSnapshot(
@@ -351,14 +446,12 @@ class TestBoardRendererMotion(unittest.TestCase):
             action_kind="jump",
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "get_animation_frame",
-            wraps=self.sprite_loader.get_animation_frame,
-        ) as spy:
-            self.renderer.render(_snapshot([piece], motions=[motion]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        spy.assert_called_once_with("P", "w", "jump", 0)
+        renderer.render(_snapshot([piece], motions=[motion]))
+
+        self.assertEqual(loader.animation_calls, [("P", "w", "jump", 0)])
 
     def test_simultaneous_motions_rendered_independently(self) -> None:
         piece_a = PieceSnapshot(
@@ -407,20 +500,21 @@ class TestBoardRendererMotion(unittest.TestCase):
             duration_ms=1000,
             action_kind="move",
         )
-        draw_calls: list[tuple[int, int]] = []
-        original_draw_on = Img.draw_on
+        draw_order: list[str] = []
+        idle_sprite = RecordingSprite(label="stationary", draw_order=draw_order)
+        moving_sprite = RecordingSprite(label="moving", draw_order=draw_order)
+        loader = RecordingSpriteLoader(
+            idle_sprite=idle_sprite,
+            animation_sprite=moving_sprite,
+        )
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        def _spy_draw_on(self, other_img, x, y):
-            draw_calls.append((x, y))
-            return original_draw_on(self, other_img, x, y)
-
-        with patch.object(Img, "draw_on", _spy_draw_on):
-            self.renderer.render(_snapshot([stationary, moving], motions=[motion]))
+        renderer.render(_snapshot([stationary, moving], motions=[motion]))
 
         stationary_xy = self.layout.centered_top_left(Position(0, 0), 64, 64)
-        self.assertEqual(len(draw_calls), 2)
-        self.assertEqual(draw_calls[0], stationary_xy)
-        self.assertNotEqual(draw_calls[1], stationary_xy)
+        self.assertEqual(draw_order, ["stationary", "moving"])
+        self.assertEqual(idle_sprite.draw_calls[0][1:], stationary_xy)
+        self.assertNotEqual(moving_sprite.draw_calls[0][1:], stationary_xy)
 
     def test_selection_border_visible_above_moving_piece(self) -> None:
         moving = PieceSnapshot(
@@ -551,14 +645,12 @@ class TestBoardRendererRest(unittest.TestCase):
             id="wK_0_0", color="w", kind="K", cell=Position(0, 0), state="idle"
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "load_idle_sprite",
-            wraps=self.sprite_loader.load_idle_sprite,
-        ) as spy:
-            self.renderer.render(_snapshot([piece]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        spy.assert_called_once_with("K", "w")
+        renderer.render(_snapshot([piece]))
+
+        self.assertEqual(loader.idle_calls, [("K", "w")])
 
     def test_short_rest_piece_uses_short_rest_animation_state(self) -> None:
         piece = PieceSnapshot(
@@ -568,14 +660,14 @@ class TestBoardRendererRest(unittest.TestCase):
             piece_id="wP_6_0", rest_kind="short_rest", elapsed_ms=100, duration_ms=2000
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "get_animation_frame",
-            wraps=self.sprite_loader.get_animation_frame,
-        ) as spy:
-            self.renderer.render(_snapshot([piece], rests=[rest]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        spy.assert_called_once_with("P", "w", "short_rest", 100)
+        renderer.render(_snapshot([piece], rests=[rest]))
+
+        self.assertEqual(
+            loader.animation_calls, [("P", "w", "short_rest", 100)]
+        )
 
     def test_long_rest_piece_uses_long_rest_animation_state(self) -> None:
         piece = PieceSnapshot(
@@ -585,14 +677,14 @@ class TestBoardRendererRest(unittest.TestCase):
             piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=300, duration_ms=10000
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "get_animation_frame",
-            wraps=self.sprite_loader.get_animation_frame,
-        ) as spy:
-            self.renderer.render(_snapshot([piece], rests=[rest]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        spy.assert_called_once_with("P", "w", "long_rest", 300)
+        renderer.render(_snapshot([piece], rests=[rest]))
+
+        self.assertEqual(
+            loader.animation_calls, [("P", "w", "long_rest", 300)]
+        )
 
     def test_idle_and_resting_pieces_use_same_cell_centering(self) -> None:
         cell = Position(6, 0)
@@ -605,30 +697,21 @@ class TestBoardRendererRest(unittest.TestCase):
         rest = RestSnapshot(
             piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000
         )
-        idle_sprite = Mock()
-        idle_sprite.pixels.shape = (42, 30, 4)
-        resting_sprite = Mock()
-        resting_sprite.pixels.shape = (42, 30, 4)
+        idle_sprite = RecordingSprite(width=30, height=42)
+        resting_sprite = RecordingSprite(width=30, height=42)
+        loader = RecordingSpriteLoader(
+            idle_sprite=idle_sprite,
+            animation_sprite=resting_sprite,
+        )
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        with (
-            patch.object(
-                self.sprite_loader,
-                "load_idle_sprite",
-                return_value=idle_sprite,
-            ) as idle_spy,
-            patch.object(
-                self.sprite_loader,
-                "get_animation_frame",
-                return_value=resting_sprite,
-            ) as rest_spy,
-        ):
-            self.renderer.render(_snapshot([idle_piece, resting_piece], rests=[rest]))
+        renderer.render(_snapshot([idle_piece, resting_piece], rests=[rest]))
 
         centered_xy = self.layout.centered_top_left(cell, 30, 42)
-        self.assertEqual(idle_sprite.draw_on.call_args.args[1:], centered_xy)
-        self.assertEqual(resting_sprite.draw_on.call_args.args[1:], centered_xy)
-        idle_spy.assert_called_once_with("K", "w")
-        rest_spy.assert_called_once_with("P", "w", "long_rest", 0)
+        self.assertEqual(idle_sprite.draw_calls[0][1:], centered_xy)
+        self.assertEqual(resting_sprite.draw_calls[0][1:], centered_xy)
+        self.assertEqual(loader.idle_calls, [("K", "w")])
+        self.assertEqual(loader.animation_calls, [("P", "w", "long_rest", 0)])
 
     def test_resting_piece_not_also_rendered_with_idle_sprite(self) -> None:
         piece = PieceSnapshot(
@@ -638,14 +721,12 @@ class TestBoardRendererRest(unittest.TestCase):
             piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "load_idle_sprite",
-            wraps=self.sprite_loader.load_idle_sprite,
-        ) as idle_spy:
-            self.renderer.render(_snapshot([piece], rests=[rest]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        idle_spy.assert_not_called()
+        renderer.render(_snapshot([piece], rests=[rest]))
+
+        self.assertEqual(loader.idle_calls, [])
 
     def test_rest_frame_selection_uses_rest_elapsed_ms(self) -> None:
         piece = PieceSnapshot(
@@ -655,36 +736,38 @@ class TestBoardRendererRest(unittest.TestCase):
             piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=750, duration_ms=10000
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "get_animation_frame",
-            wraps=self.sprite_loader.get_animation_frame,
-        ) as spy:
-            self.renderer.render(_snapshot([piece], rests=[rest]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        spy.assert_called_once_with("P", "w", "long_rest", 750)
+        renderer.render(_snapshot([piece], rests=[rest]))
+
+        self.assertEqual(
+            loader.animation_calls, [("P", "w", "long_rest", 750)]
+        )
 
     def test_rest_config_and_images_are_cached_across_frames(self) -> None:
         piece = PieceSnapshot(
             id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest"
         )
 
-        with patch.object(img_cv2, "imread", wraps=img_cv2.imread) as mocked_imread:
-            for elapsed_ms in (0, 10, 20):
-                rest = RestSnapshot(
-                    piece_id="wP_6_0",
-                    rest_kind="long_rest",
-                    elapsed_ms=elapsed_ms,
-                    duration_ms=10000,
-                )
-                self.renderer.render(_snapshot([piece], rests=[rest]))
+        image_factory = RecordingImageFactory()
+        sprite_loader = SpriteLoader(
+            PIECES_ROOT,
+            image_factory=image_factory,
+        )
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, sprite_loader, self.layout)
 
-        frame_reads = [
-            call
-            for call in mocked_imread.call_args_list
-            if "long_rest" in call.args[0] and "1.png" in call.args[0]
-        ]
-        self.assertEqual(len(frame_reads), 1)
+        for elapsed_ms in (0, 10, 20):
+            rest = RestSnapshot(
+                piece_id="wP_6_0",
+                rest_kind="long_rest",
+                elapsed_ms=elapsed_ms,
+                duration_ms=10000,
+            )
+            renderer.render(_snapshot([piece], rests=[rest]))
+
+        self.assertEqual(len(image_factory.read_paths), 1)
+        self.assertIn("long_rest", image_factory.read_paths[0].parts)
 
     def test_moving_resting_and_idle_pieces_render_together(self) -> None:
         idle_piece = PieceSnapshot(
@@ -797,14 +880,12 @@ class TestBoardRendererRest(unittest.TestCase):
             piece_id="wP_1_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000
         )
 
-        with patch.object(
-            self.sprite_loader,
-            "get_animation_frame",
-            wraps=self.sprite_loader.get_animation_frame,
-        ) as spy:
-            self.renderer.render(_snapshot([piece], rests=[rest]))
+        loader = RecordingSpriteLoader(delegate=self.sprite_loader)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        spy.assert_called_once_with("Q", "w", "long_rest", 0)
+        renderer.render(_snapshot([piece], rests=[rest]))
+
+        self.assertEqual(loader.animation_calls, [("Q", "w", "long_rest", 0)])
 
     def test_render_does_not_mutate_snapshot_with_active_rest(self) -> None:
         piece = PieceSnapshot(
