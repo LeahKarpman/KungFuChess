@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,8 +28,15 @@ class _AnimationConfig:
 class SpriteLoader:
     """Load and cache idle and animated sprites for piece kind/color combinations."""
 
-    def __init__(self, assets_root: Path) -> None:
+    def __init__(
+        self,
+        assets_root: Path,
+        image_factory: Callable[[], Img] = Img,
+        frame_selector: Callable[[int, float, int, bool], int] = select_frame_index,
+    ) -> None:
         self._assets_root = Path(assets_root)
+        self._image_factory = image_factory
+        self._frame_selector = frame_selector
         self._idle_cache: dict[tuple[str, str], Img] = {}
         self._animation_config_cache: dict[tuple[str, str, str], _AnimationConfig] = {}
         self._animation_frame_cache: dict[tuple[str, str, str, int], Img] = {}
@@ -43,7 +51,7 @@ class SpriteLoader:
             return cached
 
         sprite_path = self._piece_directory(kind, color) / IDLE_SPRITE_RELATIVE_PATH
-        sprite = Img().read(sprite_path)
+        sprite = self._image_factory().read(sprite_path)
         self._idle_cache[key] = sprite
         return sprite
 
@@ -52,7 +60,7 @@ class SpriteLoader:
         self._validate_kind_and_color(kind, color)
 
         config = self._get_animation_config(kind, color, state)
-        frame_index = select_frame_index(
+        frame_index = self._frame_selector(
             elapsed_ms, config.frames_per_sec, len(config.frame_paths), config.is_loop
         )
 
@@ -61,7 +69,7 @@ class SpriteLoader:
         if cached is not None:
             return cached
 
-        frame = Img().read(config.frame_paths[frame_index])
+        frame = self._image_factory().read(config.frame_paths[frame_index])
         self._animation_frame_cache[cache_key] = frame
         return frame
 

@@ -1,7 +1,6 @@
 # pyright: reportOptionalMemberAccess=false
 
 import unittest
-from unittest.mock import MagicMock
 
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.io.board_parser import parse_board
@@ -10,6 +9,18 @@ from kungfu_chess.model.position import Position
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.rules.rule_engine import JumpValidation, RuleEngine
 from tests.unit.game_engine_test_support import make_engine as _engine
+
+
+class _RecordingJumpRules:
+    def __init__(self, result: JumpValidation | None = None) -> None:
+        self.result = result
+        self.calls: list[tuple[object, Position]] = []
+
+    def validate_jump(self, board, pos: Position) -> JumpValidation:
+        self.calls.append((board, pos))
+        if self.result is None:
+            raise AssertionError("validate_jump must not be called")
+        return self.result
 
 
 class TestLandingReservation(unittest.TestCase):
@@ -249,15 +260,15 @@ class TestJumpResult(unittest.TestCase):
         self.assertEqual(result.reason, "game_over")
 
     def test_game_over_checked_before_rule_engine(self) -> None:
-        mock_rules = MagicMock(spec=RuleEngine)
+        rules = _RecordingJumpRules()
         board = parse_board([". wK ."])
-        engine = GameEngine(board, mock_rules, RealTimeArbiter())
+        engine = GameEngine(board, rules, RealTimeArbiter())
         engine._game_over = True
 
         result = engine.jump(Position(0, 1))
 
         self.assertEqual(result.reason, "game_over")
-        mock_rules.validate_jump.assert_not_called()
+        self.assertEqual(rules.calls, [])
 
     def test_rejected_jump_does_not_mutate_board(self) -> None:
         engine, board = _engine([". ."])
@@ -292,14 +303,15 @@ class TestJumpResult(unittest.TestCase):
         self.assertEqual(len(jump_started_events), 1)
 
     def test_jump_validation_is_delegated_to_rule_engine(self) -> None:
-        mock_rules = MagicMock(spec=RuleEngine)
-        mock_rules.validate_jump.return_value = JumpValidation(ok=False, reason="injected_reason")
+        rules = _RecordingJumpRules(
+            JumpValidation(ok=False, reason="injected_reason")
+        )
         board = parse_board([". wK ."])
-        engine = GameEngine(board, mock_rules, RealTimeArbiter())
+        engine = GameEngine(board, rules, RealTimeArbiter())
 
         result = engine.jump(Position(0, 1))
 
-        mock_rules.validate_jump.assert_called_once_with(board, Position(0, 1))
+        self.assertEqual(rules.calls, [(board, Position(0, 1))])
         self.assertFalse(result.ok)
         self.assertEqual(result.reason, "injected_reason")
 
@@ -307,10 +319,9 @@ class TestJumpResult(unittest.TestCase):
         """A RuleEngine that (incorrectly) approves a jump with no piece there
         must not crash GameEngine.jump(); it must reject cleanly instead.
         """
-        mock_rules = MagicMock(spec=RuleEngine)
-        mock_rules.validate_jump.return_value = JumpValidation(ok=True, reason="ok")
+        rules = _RecordingJumpRules(JumpValidation(ok=True, reason="ok"))
         board = parse_board([". ."])
-        engine = GameEngine(board, mock_rules, RealTimeArbiter())
+        engine = GameEngine(board, rules, RealTimeArbiter())
 
         result = engine.jump(Position(0, 0))
 

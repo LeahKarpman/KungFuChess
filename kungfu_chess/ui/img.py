@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import pathlib
 from collections.abc import Callable
+from typing import Any
 
 import cv2
 import numpy as np
 
 
 class Img:
-    def __init__(self) -> None:
+    def __init__(self, cv_backend: Any = cv2) -> None:
+        self._cv = cv_backend
         self.img: np.ndarray | None = None
 
     @property
@@ -47,7 +49,7 @@ class Img:
             `self`, so you can chain:  `sprite = Img().read("foo.png", (64,64))`
         """
         path = str(path)
-        self.img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        self.img = self._cv.imread(path, self._cv.IMREAD_UNCHANGED)
         if self.img is None:
             raise FileNotFoundError(f"Cannot load image: {path}")
 
@@ -61,7 +63,9 @@ class Img:
             else:
                 new_w, new_h = target_w, target_h
 
-            self.img = cv2.resize(self.img, (new_w, new_h), interpolation=interpolation)
+            self.img = self._cv.resize(
+                self.img, (new_w, new_h), interpolation=interpolation
+            )
 
         return self
 
@@ -71,9 +75,9 @@ class Img:
 
         if self.img.shape[2] != other_img.img.shape[2]:
             if self.img.shape[2] == 3 and other_img.img.shape[2] == 4:
-                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2BGRA)
+                self.img = self._cv.cvtColor(self.img, self._cv.COLOR_BGR2BGRA)
             elif self.img.shape[2] == 4 and other_img.img.shape[2] == 3:
-                self.img = cv2.cvtColor(self.img, cv2.COLOR_BGRA2BGR)
+                self.img = self._cv.cvtColor(self.img, self._cv.COLOR_BGRA2BGR)
 
         h, w = self.img.shape[:2]
         H, W = other_img.img.shape[:2]
@@ -84,7 +88,7 @@ class Img:
         roi = other_img.img[y : y + h, x : x + w]
 
         if self.img.shape[2] == 4:
-            a = cv2.split(self.img)[3]
+            a = self._cv.split(self.img)[3]
             mask = a / 255.0
             for c in range(3):
                 roi[..., c] = (1 - mask) * roi[..., c] + mask * self.img[..., c]
@@ -94,27 +98,27 @@ class Img:
     def put_text(self, txt, x, y, font_size, color=(255, 255, 255, 255), thickness=1):
         if self.img is None:
             raise ValueError("Image not loaded.")
-        cv2.putText(
+        self._cv.putText(
             self.img,
             txt,
             (x, y),
-            cv2.FONT_HERSHEY_SIMPLEX,
+            self._cv.FONT_HERSHEY_SIMPLEX,
             font_size,
             color,
             thickness,
-            cv2.LINE_AA,
+            self._cv.LINE_AA,
         )
 
     def show(self):
         if self.img is None:
             raise ValueError("Image not loaded.")
-        cv2.imshow("Image", self.img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        self._cv.imshow("Image", self.img)
+        self._cv.waitKey(0)
+        self._cv.destroyAllWindows()
 
     def copy(self) -> Img:
         """Return a new Img with an independent copy of the pixel data."""
-        duplicate = Img()
+        duplicate = Img(self._cv)
         if self.img is not None:
             duplicate.img = self.img.copy()
         return duplicate
@@ -123,31 +127,37 @@ class Img:
         """Display the current image without blocking and without closing the window."""
         if self.img is None:
             raise ValueError("Image not loaded.")
-        cv2.imshow(window_name, self.img)
+        self._cv.imshow(window_name, self.img)
 
     @staticmethod
-    def poll_key(delay_ms: int) -> int:
+    def poll_key(delay_ms: int, cv_backend: Any = cv2) -> int:
         """Process pending window events for delay_ms and return the pressed key code."""
-        return cv2.waitKey(delay_ms) & 0xFF
+        return cv_backend.waitKey(delay_ms) & 0xFF
 
     @staticmethod
-    def is_window_open(window_name: str) -> bool:
+    def is_window_open(window_name: str, cv_backend: Any = cv2) -> bool:
         """Return whether window_name still has a visible OpenCV window."""
         try:
-            return cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) >= 1
-        except cv2.error:
+            return (
+                cv_backend.getWindowProperty(
+                    window_name, cv_backend.WND_PROP_VISIBLE
+                )
+                >= 1
+            )
+        except cv_backend.error:
             return False
 
     @staticmethod
-    def close_all_windows() -> None:
+    def close_all_windows(cv_backend: Any = cv2) -> None:
         """Release every window opened by show() or show_frame()."""
-        cv2.destroyAllWindows()
+        cv_backend.destroyAllWindows()
 
     @staticmethod
     def set_mouse_callbacks(
         window_name: str,
         on_left_click: Callable[[int, int], object],
         on_right_click: Callable[[int, int], object],
+        cv_backend: Any = cv2,
     ) -> None:
         """Invoke on_left_click(x, y) or on_right_click(x, y) for button presses inside window_name.
 
@@ -157,15 +167,15 @@ class Img:
         requires a window to exist before a mouse callback can be attached to it.
         All OpenCV mouse-event details (event codes, flags, userdata) stop here.
         """
-        cv2.namedWindow(window_name)
+        cv_backend.namedWindow(window_name)
 
         def _on_mouse(event: int, x: int, y: int, flags: int, userdata: object) -> None:
-            if event == cv2.EVENT_LBUTTONDOWN:
+            if event == cv_backend.EVENT_LBUTTONDOWN:
                 on_left_click(x, y)
-            elif event == cv2.EVENT_RBUTTONDOWN:
+            elif event == cv_backend.EVENT_RBUTTONDOWN:
                 on_right_click(x, y)
 
-        cv2.setMouseCallback(window_name, _on_mouse)
+        cv_backend.setMouseCallback(window_name, _on_mouse)
 
     def draw_rectangle(
         self,
@@ -188,4 +198,4 @@ class Img:
                 f"top_left {top_left} in both dimensions."
             )
 
-        cv2.rectangle(self.img, top_left, bottom_right, color, thickness)
+        self._cv.rectangle(self.img, top_left, bottom_right, color, thickness)

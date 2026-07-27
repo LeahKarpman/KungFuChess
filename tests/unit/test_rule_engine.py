@@ -3,11 +3,22 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import Mock, patch
 
 from kungfu_chess.io.board_parser import parse_board
+from kungfu_chess.model.board import Board
+from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 from kungfu_chess.rules.rule_engine import RuleEngine
+
+
+class AccessRecordingBoard(Board):
+    def __init__(self, width: int, height: int) -> None:
+        super().__init__(width, height)
+        self.inspected_positions: list[Position] = []
+
+    def get_piece(self, pos: Position) -> Piece | None:
+        self.inspected_positions.append(pos)
+        return super().get_piece(pos)
 
 
 class TestRuleEngineBoundary(unittest.TestCase):
@@ -19,56 +30,30 @@ class TestRuleEngineBoundary(unittest.TestCase):
     def test_outside_source_returns_outside_board_before_piece_inspection(
         self,
     ) -> None:
-        board = parse_board([". ."])
+        board = AccessRecordingBoard(width=2, height=1)
         destination = Position(0, 1)
 
         for source in (Position(-1, 0), Position(board.height, 0)):
             with self.subTest(source=source):
-                with (
-                    patch.object(
-                        board,
-                        "get_piece",
-                        wraps=board.get_piece,
-                    ) as get_piece,
-                    patch.object(
-                        self.rules,
-                        "legal_destinations",
-                        wraps=self.rules.legal_destinations,
-                    ) as legal_destinations,
-                ):
-                    result = self.rules.validate_move(board, source, destination)
+                result = self.rules.validate_move(board, source, destination)
 
                 self.assertFalse(result.ok)
                 self.assertEqual(result.reason, "outside_board")
-                get_piece.assert_not_called()
-                legal_destinations.assert_not_called()
+                self.assertEqual(board.inspected_positions, [])
 
     def test_outside_destination_returns_outside_board_before_piece_inspection(
         self,
     ) -> None:
-        board = parse_board(["wR ."])
+        board = AccessRecordingBoard(width=2, height=1)
         source = Position(0, 0)
 
         for destination in (Position(0, -1), Position(0, board.width)):
             with self.subTest(destination=destination):
-                with (
-                    patch.object(
-                        board,
-                        "get_piece",
-                        wraps=board.get_piece,
-                    ) as get_piece,
-                    patch.object(
-                        self.rules,
-                        "legal_destinations",
-                        wraps=self.rules.legal_destinations,
-                    ) as legal_destinations,
-                ):
-                    result = self.rules.validate_move(board, source, destination)
+                result = self.rules.validate_move(board, source, destination)
 
                 self.assertFalse(result.ok)
                 self.assertEqual(result.reason, "outside_board")
-                get_piece.assert_not_called()
-                legal_destinations.assert_not_called()
+                self.assertEqual(board.inspected_positions, [])
 
     def test_empty_source_returns_empty_source(self) -> None:
         board = parse_board([". ."])
@@ -131,17 +116,23 @@ class TestRuleEngineBoundary(unittest.TestCase):
         source = Position(1, 1)
         piece = board.get_piece(source)
         expected_destinations = {Position(9, 9)}
-        fake_rule = Mock(return_value=expected_destinations)
-        fake_destination_rule_for = Mock(return_value=fake_rule)
+        resolver_calls: list[str] = []
+        rule_calls: list[tuple[Board, Position]] = []
 
-        with patch(
-            "kungfu_chess.rules.rule_engine.destination_rule_for",
-            fake_destination_rule_for,
-        ):
-            destinations = self.rules.legal_destinations(board, source)
+        def fake_rule(rule_board: Board, rule_source: Position) -> set[Position]:
+            rule_calls.append((rule_board, rule_source))
+            return expected_destinations
 
-        fake_destination_rule_for.assert_called_once_with(piece.kind)
-        fake_rule.assert_called_once_with(board, source)
+        def fake_destination_rule_for(kind: str):
+            resolver_calls.append(kind)
+            return fake_rule
+
+        rules = RuleEngine(destination_rule_resolver=fake_destination_rule_for)
+        destinations = rules.legal_destinations(board, source)
+
+        self.assertIsNotNone(piece)
+        self.assertEqual(resolver_calls, [piece.kind])
+        self.assertEqual(rule_calls, [(board, source)])
         self.assertEqual(destinations, expected_destinations)
 
     def test_rule_queries_do_not_mutate_board_or_piece_state(self) -> None:

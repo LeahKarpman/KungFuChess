@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import unittest
 from io import StringIO
-from unittest.mock import patch
 
 from kungfu_chess.texttests.script_runner import run
 
 
 class TestTextScripts(unittest.TestCase):
     def _run(self, lines: list[str]) -> str:
-        with patch("sys.stdout", new_callable=StringIO) as mock_out:
-            run(lines)
-            return mock_out.getvalue()
+        output = StringIO()
+        run(lines, output=output)
+        return output.getvalue()
 
     # ── Iteration 1 ──────────────────────────────────────────────────────────
     def test_board_then_print(self):

@@ -8,10 +8,10 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from kungfu_chess.ui import sprite_loader as sprite_loader_module
-from kungfu_chess.ui.img import cv2 as img_cv2
+from kungfu_chess.ui.animation import select_frame_index
+from kungfu_chess.ui.img import Img
 from kungfu_chess.ui.sprite_loader import SpriteLoader
 
 REAL_PIECES_ROOT = Path(sprite_loader_module.__file__).resolve().parent / "assets" / "pieces2"
@@ -31,6 +31,27 @@ ALL_KIND_COLOR_DIRECTORIES = [
     ("P", "w", "PW"),
     ("P", "b", "PB"),
 ]
+
+
+class RecordingImageFactory:
+    def __init__(self) -> None:
+        self.created_images: list[Img] = []
+
+    def __call__(self) -> Img:
+        image = Img()
+        self.created_images.append(image)
+        return image
+
+
+class RecordingFrameSelector:
+    def __init__(self) -> None:
+        self.calls: list[tuple[int, float, int, bool]] = []
+
+    def __call__(
+        self, elapsed_ms: int, frames_per_sec: float, frame_count: int, is_loop: bool
+    ) -> int:
+        self.calls.append((elapsed_ms, frames_per_sec, frame_count, is_loop))
+        return select_frame_index(elapsed_ms, frames_per_sec, frame_count, is_loop)
 
 
 class TestSpriteLoader(unittest.TestCase):
@@ -124,14 +145,16 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         self._write_state("PW", "move", [1, 2, 3])
         loader = SpriteLoader(self.root)
 
-        with patch(
-            "kungfu_chess.ui.sprite_loader.json.loads", wraps=json.loads
-        ) as mocked_loads:
-            loader.get_animation_frame("P", "w", "move", 0)
-            loader.get_animation_frame("P", "w", "move", 100)
-            loader.get_animation_frame("P", "w", "move", 200)
+        loader.get_animation_frame("P", "w", "move", 0)
+        config_path = self.root / "PW" / "states" / "move" / "config.json"
+        config_path.write_text("{now malformed", encoding="utf-8")
+        loader.get_animation_frame("P", "w", "move", 100)
+        loader.get_animation_frame("P", "w", "move", 200)
 
-        self.assertEqual(mocked_loads.call_count, 1)
+        self.assertEqual(
+            loader.get_animation_frame("P", "w", "move", 0).pixels.shape[:2],
+            (64, 64),
+        )
 
     def test_already_loaded_frame_is_reused(self) -> None:
         self._write_state("PW", "move", [1, 2, 3])
@@ -144,17 +167,14 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
 
     def test_png_not_reloaded_for_a_cached_frame(self) -> None:
         self._write_state("PW", "move", [1, 2, 3], frames_per_sec=1, is_loop=False)
-        loader = SpriteLoader(self.root)
+        image_factory = RecordingImageFactory()
+        loader = SpriteLoader(self.root, image_factory=image_factory)
 
-        with patch.object(img_cv2, "imread", wraps=img_cv2.imread) as mocked_imread:
-            loader.get_animation_frame("P", "w", "move", 0)
-            loader.get_animation_frame("P", "w", "move", 0)
-            loader.get_animation_frame("P", "w", "move", 0)
+        loader.get_animation_frame("P", "w", "move", 0)
+        loader.get_animation_frame("P", "w", "move", 0)
+        loader.get_animation_frame("P", "w", "move", 0)
 
-        frame_reads = [
-            call for call in mocked_imread.call_args_list if "1.png" in call.args[0]
-        ]
-        self.assertEqual(len(frame_reads), 1)
+        self.assertEqual(len(image_factory.created_images), 1)
 
     def test_move_and_jump_use_separate_cache_entries(self) -> None:
         self._write_state("PW", "move", [1, 2, 3])
@@ -262,29 +282,23 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
 
     def test_positive_integer_frames_per_sec_remains_supported(self) -> None:
         self._write_state("PW", "move", [1], frames_per_sec=12)
-        loader = SpriteLoader(self.root)
+        frame_selector = RecordingFrameSelector()
+        loader = SpriteLoader(self.root, frame_selector=frame_selector)
 
-        with patch(
-            "kungfu_chess.ui.sprite_loader.select_frame_index",
-            return_value=0,
-        ) as mocked_select_frame_index:
-            loader.get_animation_frame("P", "w", "move", 0)
+        loader.get_animation_frame("P", "w", "move", 0)
 
-        frames_per_sec = mocked_select_frame_index.call_args.args[1]
+        frames_per_sec = frame_selector.calls[0][1]
         self.assertIs(type(frames_per_sec), int)
         self.assertEqual(frames_per_sec, 12)
 
     def test_positive_float_frames_per_sec_remains_supported(self) -> None:
         self._write_state("PW", "move", [1], frames_per_sec=12.5)
-        loader = SpriteLoader(self.root)
+        frame_selector = RecordingFrameSelector()
+        loader = SpriteLoader(self.root, frame_selector=frame_selector)
 
-        with patch(
-            "kungfu_chess.ui.sprite_loader.select_frame_index",
-            return_value=0,
-        ) as mocked_select_frame_index:
-            loader.get_animation_frame("P", "w", "move", 0)
+        loader.get_animation_frame("P", "w", "move", 0)
 
-        frames_per_sec = mocked_select_frame_index.call_args.args[1]
+        frames_per_sec = frame_selector.calls[0][1]
         self.assertIs(type(frames_per_sec), float)
         self.assertEqual(frames_per_sec, 12.5)
 
@@ -304,27 +318,21 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
 
     def test_true_is_loop_is_preserved_exactly(self) -> None:
         self._write_state("PW", "move", [1], is_loop=True)
-        loader = SpriteLoader(self.root)
+        frame_selector = RecordingFrameSelector()
+        loader = SpriteLoader(self.root, frame_selector=frame_selector)
 
-        with patch(
-            "kungfu_chess.ui.sprite_loader.select_frame_index",
-            return_value=0,
-        ) as mocked_select_frame_index:
-            loader.get_animation_frame("P", "w", "move", 0)
+        loader.get_animation_frame("P", "w", "move", 0)
 
-        self.assertIs(mocked_select_frame_index.call_args.args[3], True)
+        self.assertIs(frame_selector.calls[0][3], True)
 
     def test_false_is_loop_is_preserved_exactly(self) -> None:
         self._write_state("PW", "move", [1], is_loop=False)
-        loader = SpriteLoader(self.root)
+        frame_selector = RecordingFrameSelector()
+        loader = SpriteLoader(self.root, frame_selector=frame_selector)
 
-        with patch(
-            "kungfu_chess.ui.sprite_loader.select_frame_index",
-            return_value=0,
-        ) as mocked_select_frame_index:
-            loader.get_animation_frame("P", "w", "move", 0)
+        loader.get_animation_frame("P", "w", "move", 0)
 
-        self.assertIs(mocked_select_frame_index.call_args.args[3], False)
+        self.assertIs(frame_selector.calls[0][3], False)
 
     def test_missing_sprite_frames_raises_clear_error(self) -> None:
         state_dir = self.root / "PW" / "states" / "move"
