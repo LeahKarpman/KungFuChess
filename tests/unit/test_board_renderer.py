@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
-from unittest.mock import call, patch
+from unittest.mock import Mock, call, patch
 
 from kungfu_chess.model.game_state import (
     GameSnapshot,
@@ -529,21 +529,41 @@ class TestBoardRendererRest(unittest.TestCase):
 
         spy.assert_called_once_with("P", "w", "long_rest", 300)
 
-    def test_resting_piece_remains_centered_in_its_cell(self) -> None:
-        piece = PieceSnapshot(
-            id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="long_rest"
+    def test_idle_and_resting_pieces_use_same_cell_centering(self) -> None:
+        cell = Position(6, 0)
+        idle_piece = PieceSnapshot(
+            id="wK_6_0", color="w", kind="K", cell=cell, state="idle"
+        )
+        resting_piece = PieceSnapshot(
+            id="wP_6_0", color="w", kind="P", cell=cell, state="long_rest"
         )
         rest = RestSnapshot(
             piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000
         )
+        idle_sprite = Mock()
+        idle_sprite.img.shape = (42, 30, 4)
+        resting_sprite = Mock()
+        resting_sprite.img.shape = (42, 30, 4)
 
-        frame = self.renderer.render(_snapshot([piece], rests=[rest]))
-        baseline = self.renderer.render(_snapshot([]))
+        with (
+            patch.object(
+                self.sprite_loader,
+                "load_idle_sprite",
+                return_value=idle_sprite,
+            ) as idle_spy,
+            patch.object(
+                self.sprite_loader,
+                "get_animation_frame",
+                return_value=resting_sprite,
+            ) as rest_spy,
+        ):
+            self.renderer.render(_snapshot([idle_piece, resting_piece], rests=[rest]))
 
-        self.assertFalse((frame.img[650, 50] == baseline.img[650, 50]).all())
-        far_cell = frame.img[50, 750]
-        empty_far_cell = baseline.img[50, 750]
-        self.assertTrue((far_cell == empty_far_cell).all())
+        centered_xy = self.layout.centered_top_left(cell, 30, 42)
+        self.assertEqual(idle_sprite.draw_on.call_args.args[1:], centered_xy)
+        self.assertEqual(resting_sprite.draw_on.call_args.args[1:], centered_xy)
+        idle_spy.assert_called_once_with("K", "w")
+        rest_spy.assert_called_once_with("P", "w", "long_rest", 0)
 
     def test_resting_piece_not_also_rendered_with_idle_sprite(self) -> None:
         piece = PieceSnapshot(
