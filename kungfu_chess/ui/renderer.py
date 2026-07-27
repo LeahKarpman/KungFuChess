@@ -158,7 +158,7 @@ class BoardRenderer:
     def _draw_sprite_centered_in_cell(
         self, canvas: Img, sprite: Img, cell: Position
     ) -> None:
-        sprite_height, sprite_width = sprite.img.shape[:2]
+        sprite_height, sprite_width = sprite.pixels.shape[:2]
         x, y = self._layout.centered_top_left(cell, sprite_width, sprite_height)
         sprite.draw_on(canvas, x, y)
 
@@ -176,7 +176,7 @@ class BoardRenderer:
         sprite = self._sprite_loader.get_animation_frame(
             piece.kind, piece.color, motion.action_kind, motion.elapsed_ms
         )
-        sprite_height, sprite_width = sprite.img.shape[:2]
+        sprite_height, sprite_width = sprite.pixels.shape[:2]
         x, y = self._layout.centered_top_left_at_point(
             point, sprite_width, sprite_height
         )

@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+
 from __future__ import annotations
 
 import unittest

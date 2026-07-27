@@ -77,13 +77,13 @@ class TestLoadGameConfig(unittest.TestCase):
     def test_non_integer_value_is_rejected(self) -> None:
         self._write(json.dumps({"short_cooldown_ms": 2000.5, "long_cooldown_ms": 10000}))
 
-        with self.assertRaisesRegex(ValueError, "short_cooldown_ms"):
+        with self.assertRaisesRegex(TypeError, "short_cooldown_ms"):
             load_game_config(self.path)
 
     def test_boolean_value_is_rejected(self) -> None:
         self._write(json.dumps({"short_cooldown_ms": True, "long_cooldown_ms": 10000}))
 
-        with self.assertRaisesRegex(ValueError, "short_cooldown_ms"):
+        with self.assertRaisesRegex(TypeError, "short_cooldown_ms"):
             load_game_config(self.path)
 
     def test_missing_file_raises_clear_error(self) -> None:

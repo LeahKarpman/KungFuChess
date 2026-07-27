@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Set
 
 from ..model.board import Board
 from ..model.position import Position
@@ -28,7 +27,7 @@ class JumpValidation:
 class RuleEngine:
     """Answer move- and jump-legality queries; never mutates board or piece state."""
 
-    def legal_destinations(self, board: Board, src: Position) -> Set[Position]:
+    def legal_destinations(self, board: Board, src: Position) -> set[Position]:
         """Return the legal destinations for the piece at src, or empty if there is none."""
         piece = board.get_piece(src)
         if not piece:

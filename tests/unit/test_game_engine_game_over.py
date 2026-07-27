@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+
 import unittest
 
 from kungfu_chess.model.position import Position
@@ -36,7 +38,7 @@ class TestGameOver(unittest.TestCase):
 
 class TestCooldownGameOver(unittest.TestCase):
     def test_capturing_a_king_ends_the_game(self) -> None:
-        engine, board = _engine(["wR . bK"])
+        engine, _board = _engine(["wR . bK"])
         engine.request_move(Position(0, 0), Position(0, 2))
 
         engine.wait(2000)

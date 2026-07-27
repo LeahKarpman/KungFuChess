@@ -1,8 +1,6 @@
 """Arbitration policy for scheduling and resolving timed piece actions."""
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
-
 from ..model.piece import Piece
 from ..model.position import Position
 from .motion import (
@@ -41,12 +39,12 @@ class RealTimeArbiter:
         short_cooldown_ms: int = DEFAULT_SHORT_COOLDOWN_MS,
         long_cooldown_ms: int = DEFAULT_LONG_COOLDOWN_MS,
     ) -> None:
-        self._motions: Dict[str, Motion] = {}
-        self._rests: Dict[str, Rest] = {}
+        self._motions: dict[str, Motion] = {}
+        self._rests: dict[str, Rest] = {}
         self._next_sequence = 0
         self._short_cooldown_ms = short_cooldown_ms
         self._long_cooldown_ms = long_cooldown_ms
-        self._completed_rest_piece_ids: List[str] = []
+        self._completed_rest_piece_ids: list[str] = []
 
     @property
     def short_cooldown_ms(self) -> int:
@@ -92,7 +90,7 @@ class RealTimeArbiter:
             duration_ms=MS_PER_CELL,
         )
 
-    def next_boundary_ms(self) -> Optional[int]:
+    def next_boundary_ms(self) -> int | None:
         """Return the simulated time until the nearest motion or rest completion.
 
         Returns None when nothing is left to advance toward. A completed
@@ -109,7 +107,7 @@ class RealTimeArbiter:
         positive = [value for value in remaining if value > 0]
         return min(positive) if positive else None
 
-    def advance_time(self, ms: int) -> List[ArrivalEvent]:
+    def advance_time(self, ms: int) -> list[ArrivalEvent]:
         """Advance every action and rest, returning arrival events in resolution order.
 
         A motion that reaches completion is reported here but left in place
@@ -129,7 +127,7 @@ class RealTimeArbiter:
 
         self._advance_rests(ms)
 
-        completed: List[Tuple[int, int, int, ArrivalEvent]] = []
+        completed: list[tuple[int, int, int, ArrivalEvent]] = []
 
         for motion in self._motions.values():
             if motion.is_complete():
@@ -192,7 +190,7 @@ class RealTimeArbiter:
             del self._rests[piece_id]
             self._completed_rest_piece_ids.append(piece_id)
 
-    def consume_completed_rest_piece_ids(self) -> Tuple[str, ...]:
+    def consume_completed_rest_piece_ids(self) -> tuple[str, ...]:
         """Return and clear piece_ids whose rest finished during the last advance_time call."""
         piece_ids = tuple(self._completed_rest_piece_ids)
         self._completed_rest_piece_ids.clear()
@@ -221,13 +219,13 @@ class RealTimeArbiter:
 
         self._rests[piece.id] = rest
 
-    def active_actions(self) -> Tuple[ActiveAction, ...]:
+    def active_actions(self) -> tuple[ActiveAction, ...]:
         """Return immutable views of every currently scheduled action."""
         return tuple(
             self._to_active_action(motion) for motion in self._motions.values()
         )
 
-    def active_rests(self) -> Tuple[ActiveRest, ...]:
+    def active_rests(self) -> tuple[ActiveRest, ...]:
         """Return immutable views of every currently active cooldown."""
         return tuple(
             ActiveRest(
@@ -239,7 +237,7 @@ class RealTimeArbiter:
             for rest in self._rests.values()
         )
 
-    def active_jump_at(self, landing: Position) -> Optional[ActiveAction]:
+    def active_jump_at(self, landing: Position) -> ActiveAction | None:
         """Return the jump scheduled to land on a cell, if one exists."""
         for motion in self._motions.values():
             if motion.action_kind == "jump" and motion.destination == landing:

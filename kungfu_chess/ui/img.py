@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Callable
+from collections.abc import Callable
 
 import cv2
 import numpy as np
 
 
 class Img:
-    def __init__(self):
-        self.img = None
+    def __init__(self) -> None:
+        self.img: np.ndarray | None = None
+
+    @property
+    def pixels(self) -> np.ndarray:
+        """Return loaded pixel data, raising when the image has not been loaded."""
+        if self.img is None:
+            raise ValueError("Image not loaded.")
+        return self.img
 
     def read(
         self,
@@ -17,7 +24,7 @@ class Img:
         size: tuple[int, int] | None = None,
         keep_aspect: bool = False,
         interpolation: int = cv2.INTER_AREA,
-    ) -> "Img":
+    ) -> Img:
         """
         Load `path` into self.img and **optionally resize**.
 
@@ -77,7 +84,7 @@ class Img:
         roi = other_img.img[y : y + h, x : x + w]
 
         if self.img.shape[2] == 4:
-            b, g, r, a = cv2.split(self.img)
+            a = cv2.split(self.img)[3]
             mask = a / 255.0
             for c in range(3):
                 roi[..., c] = (1 - mask) * roi[..., c] + mask * self.img[..., c]
@@ -105,7 +112,7 @@ class Img:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    def copy(self) -> "Img":
+    def copy(self) -> Img:
         """Return a new Img with an independent copy of the pixel data."""
         duplicate = Img()
         if self.img is not None:
@@ -139,8 +146,8 @@ class Img:
     @staticmethod
     def set_mouse_callbacks(
         window_name: str,
-        on_left_click: Callable[[int, int], None],
-        on_right_click: Callable[[int, int], None],
+        on_left_click: Callable[[int, int], object],
+        on_right_click: Callable[[int, int], object],
     ) -> None:
         """Invoke on_left_click(x, y) or on_right_click(x, y) for button presses inside window_name.
 

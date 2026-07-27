@@ -1,4 +1,5 @@
 import unittest
+
 from kungfu_chess.input.board_mapper import BoardMapper
 from kungfu_chess.model.position import Position
 
@@ -65,6 +66,8 @@ class TestBoardMapper(unittest.TestCase):
     def test_rejects_non_positive_cell_size(self) -> None:
         """Reject mapper configurations that cannot represent board cells."""
         for cell_size in (0, -100):
-            with self.subTest(cell_size=cell_size):
-                with self.assertRaisesRegex(ValueError, "^invalid_cell_size$"):
-                    BoardMapper(width=8, height=8, cell_size=cell_size)
+            with (
+                self.subTest(cell_size=cell_size),
+                self.assertRaisesRegex(ValueError, "^invalid_cell_size$"),
+            ):
+                BoardMapper(width=8, height=8, cell_size=cell_size)

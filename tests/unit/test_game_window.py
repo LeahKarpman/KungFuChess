@@ -397,7 +397,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        window_name, on_left_click, on_right_click = (
+        _window_name, on_left_click, _on_right_click = (
             self.mock_set_mouse_callbacks.call_args.args
         )
         on_left_click(123, 456)
@@ -420,7 +420,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        window_name, on_left_click, on_right_click = (
+        _window_name, _on_left_click, on_right_click = (
             self.mock_set_mouse_callbacks.call_args.args
         )
         on_right_click(123, 456)

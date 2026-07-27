@@ -1,19 +1,15 @@
 from __future__ import annotations
-from typing import List, Literal, Tuple, Union
 
+from typing import Literal
 
-BoardCommand = Tuple[Literal["board"], List[str]]
-PrintBoardCommand = Tuple[Literal["print_board"]]
-ClickCommand = Tuple[Literal["click"], int, int]
-JumpCommand = Tuple[Literal["jump"], int, int]
-WaitCommand = Tuple[Literal["wait"], int]
-ScriptCommand = Union[
-    BoardCommand,
-    PrintBoardCommand,
-    ClickCommand,
-    JumpCommand,
-    WaitCommand,
-]
+BoardCommand = tuple[Literal["board"], list[str]]
+PrintBoardCommand = tuple[Literal["print_board"]]
+ClickCommand = tuple[Literal["click"], int, int]
+JumpCommand = tuple[Literal["jump"], int, int]
+WaitCommand = tuple[Literal["wait"], int]
+ScriptCommand = (
+    BoardCommand | PrintBoardCommand | ClickCommand | JumpCommand | WaitCommand
+)
 
 
 def _is_command_or_section(line: str) -> bool:

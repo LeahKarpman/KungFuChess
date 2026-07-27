@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import unittest
+from collections.abc import Callable
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import cv2
@@ -15,7 +17,7 @@ class TestImgCopy(unittest.TestCase):
         original.img = np.zeros((4, 4, 4), dtype=np.uint8)
 
         duplicate = original.copy()
-        duplicate.img[0, 0, 0] = 255
+        duplicate.pixels[0, 0, 0] = 255
 
         self.assertEqual(original.img[0, 0, 0], 0)
         self.assertIsNot(duplicate.img, original.img)
@@ -99,8 +101,13 @@ class TestImgMouseCallback(unittest.TestCase):
     """
 
     @staticmethod
-    def _capture_on_mouse(mocked_set_mouse_callback) -> object:
-        return mocked_set_mouse_callback.call_args.args[1]
+    def _capture_on_mouse(
+        mocked_set_mouse_callback,
+    ) -> Callable[[int, int, int, int, object], None]:
+        return cast(
+            Callable[[int, int, int, int, object], None],
+            mocked_set_mouse_callback.call_args.args[1],
+        )
 
     def _install(self, on_left_click, on_right_click):
         with (

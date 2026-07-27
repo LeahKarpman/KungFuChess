@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+
 import unittest
 from unittest.mock import MagicMock
 

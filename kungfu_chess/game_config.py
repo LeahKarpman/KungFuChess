@@ -33,7 +33,7 @@ def load_game_config(path: Path) -> GameConfig:
         raise ValueError(f"Malformed game configuration JSON in {path}: {error}") from error
 
     if not isinstance(data, dict):
-        raise ValueError(f"Game configuration in {path} must be a JSON object")
+        raise TypeError(f"Game configuration in {path} must be a JSON object")
 
     return GameConfig(
         short_cooldown_ms=_require_positive_int(data, "short_cooldown_ms", path),
@@ -48,7 +48,7 @@ def _require_positive_int(data: dict, field: str, path: Path) -> int:
 
     value = data[field]
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"Field {field!r} in {path} must be an integer, got {value!r}")
+        raise TypeError(f"Field {field!r} in {path} must be an integer, got {value!r}")
     if value <= 0:
         raise ValueError(f"Field {field!r} in {path} must be positive, got {value!r}")
 

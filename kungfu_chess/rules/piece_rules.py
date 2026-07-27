@@ -8,16 +8,15 @@ text parsing, or rendering.
 """
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Set, Tuple
+from collections.abc import Callable
 
 from ..model.board import Board
 from ..model.position import Position
 
-
-DestinationRule = Callable[[Board, Position], Set[Position]]
+DestinationRule = Callable[[Board, Position], set[Position]]
 """A function computing the legal destinations for a piece at a source cell."""
 
-_KNIGHT_OFFSETS: Tuple[Tuple[int, int], ...] = (
+_KNIGHT_OFFSETS: tuple[tuple[int, int], ...] = (
     (-2, -1),
     (-2, 1),
     (-1, -2),
@@ -27,7 +26,7 @@ _KNIGHT_OFFSETS: Tuple[Tuple[int, int], ...] = (
     (2, -1),
     (2, 1),
 )
-_KING_OFFSETS: Tuple[Tuple[int, int], ...] = (
+_KING_OFFSETS: tuple[tuple[int, int], ...] = (
     (-1, -1),
     (-1, 0),
     (-1, 1),
@@ -40,15 +39,17 @@ _KING_OFFSETS: Tuple[Tuple[int, int], ...] = (
 
 
 def _sliding(
-    board: Board, src: Position, directions: List[Tuple[int, int]]
-) -> Set[Position]:
+    board: Board, src: Position, directions: list[tuple[int, int]]
+) -> set[Position]:
     """Walk each direction from src until off-board or blocked by a piece.
 
     A blocking enemy square is included (capturable) but nothing beyond it;
     a blocking friendly square is excluded and also stops the walk.
     """
-    destinations: Set[Position] = set()
+    destinations: set[Position] = set()
     piece = board.get_piece(src)
+    assert piece is not None
+
     for dr, dc in directions:
         r, c = src.row + dr, src.col + dc
         while board.in_bounds(Position(r, c)):
@@ -64,17 +65,17 @@ def _sliding(
     return destinations
 
 
-def rook_destinations(board: Board, src: Position) -> Set[Position]:
+def rook_destinations(board: Board, src: Position) -> set[Position]:
     """Return legal rook destinations: orthogonal sliding stopped by blockers."""
     return _sliding(board, src, [(-1, 0), (1, 0), (0, -1), (0, 1)])
 
 
-def bishop_destinations(board: Board, src: Position) -> Set[Position]:
+def bishop_destinations(board: Board, src: Position) -> set[Position]:
     """Return legal bishop destinations: diagonal sliding stopped by blockers."""
     return _sliding(board, src, [(-1, -1), (-1, 1), (1, -1), (1, 1)])
 
 
-def queen_destinations(board: Board, src: Position) -> Set[Position]:
+def queen_destinations(board: Board, src: Position) -> set[Position]:
     """Return legal queen destinations: the union of rook and bishop movement."""
     return rook_destinations(board, src) | bishop_destinations(board, src)
 
@@ -82,14 +83,14 @@ def queen_destinations(board: Board, src: Position) -> Set[Position]:
 def _offset_destinations(
     board: Board,
     src: Position,
-    offsets: Tuple[Tuple[int, int], ...],
-) -> Set[Position]:
+    offsets: tuple[tuple[int, int], ...],
+) -> set[Position]:
     """Return in-bounds offset destinations not occupied by a friendly piece.
 
     Shared by king and knight movement, which both jump to a fixed set of
     relative offsets rather than sliding through intermediate squares.
     """
-    destinations: Set[Position] = set()
+    destinations: set[Position] = set()
     piece = board.get_piece(src)
     assert piece is not None
 
@@ -105,25 +106,27 @@ def _offset_destinations(
     return destinations
 
 
-def knight_destinations(board: Board, src: Position) -> Set[Position]:
+def knight_destinations(board: Board, src: Position) -> set[Position]:
     """Return legal knight destinations: fixed L-shaped jumps that ignore blockers along the way."""
     return _offset_destinations(board, src, _KNIGHT_OFFSETS)
 
 
-def king_destinations(board: Board, src: Position) -> Set[Position]:
+def king_destinations(board: Board, src: Position) -> set[Position]:
     """Return legal king destinations: one cell in any direction."""
     return _offset_destinations(board, src, _KING_OFFSETS)
 
 
-def pawn_destinations(board: Board, src: Position) -> Set[Position]:
+def pawn_destinations(board: Board, src: Position) -> set[Position]:
     """Return legal pawn destinations for either color.
 
     Covers a single forward step, an initial double step, and diagonal
     captures of enemy pieces. Direction and the eligible start row are
     derived from the pawn's own color.
     """
-    destinations: Set[Position] = set()
+    destinations: set[Position] = set()
     piece = board.get_piece(src)
+    assert piece is not None
+
     direction = -1 if piece.color == "w" else 1
     start_row = board.height - 2 if piece.color == "w" else 1
 
@@ -145,7 +148,7 @@ def pawn_destinations(board: Board, src: Position) -> Set[Position]:
     return destinations
 
 
-_DESTINATION_RULES: Dict[str, DestinationRule] = {
+_DESTINATION_RULES: dict[str, DestinationRule] = {
     "R": rook_destinations,
     "B": bishop_destinations,
     "Q": queen_destinations,
@@ -155,6 +158,6 @@ _DESTINATION_RULES: Dict[str, DestinationRule] = {
 }
 
 
-def destination_rule_for(kind: str) -> Optional[DestinationRule]:
+def destination_rule_for(kind: str) -> DestinationRule | None:
     """Return the destination rule registered for a piece kind, or None if unknown."""
     return _DESTINATION_RULES.get(kind)

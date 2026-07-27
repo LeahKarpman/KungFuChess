@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+
 from __future__ import annotations
 
 import unittest
@@ -783,7 +785,7 @@ class TestEventImmutability(unittest.TestCase):
         event = MoveStarted(piece_id="wR_0_0", source=Position(0, 0), destination=Position(0, 1))
 
         with self.assertRaises(AttributeError):
-            setattr(event, "piece_id", "changed")
+            setattr(event, "piece_id", "changed")  # noqa: B010
 
     def test_consume_events_clears_internal_queue(self) -> None:
         engine, _ = _engine(["wR . ."])
@@ -802,7 +804,9 @@ class TestEventImmutability(unittest.TestCase):
         events = engine.consume_events()
 
         with self.assertRaises(AttributeError):
-            events.append(MoveStarted("x", Position(0, 0), Position(0, 1)))
+            getattr(events, "append")(  # noqa: B009
+                MoveStarted("x", Position(0, 0), Position(0, 1))
+            )
 
 
 if __name__ == "__main__":

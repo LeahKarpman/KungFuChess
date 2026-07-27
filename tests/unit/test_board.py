@@ -1,4 +1,5 @@
 import unittest
+
 from kungfu_chess.model.board import Board
 from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position

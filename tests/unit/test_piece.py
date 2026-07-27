@@ -18,7 +18,7 @@ class TestPiece(unittest.TestCase):
         piece = Piece("piece", "w", "K", Position(0, 0))
 
         with self.assertRaises(AttributeError):
-            piece.cell = Position(1, 1)
+            setattr(piece, "cell", Position(1, 1))  # noqa: B010
 
     def test_rejects_invalid_color(self) -> None:
         with self.assertRaisesRegex(ValueError, "^invalid_piece_color$"):
@@ -30,7 +30,13 @@ class TestPiece(unittest.TestCase):
 
     def test_rejects_invalid_lifecycle_state(self) -> None:
         with self.assertRaisesRegex(ValueError, "^invalid_piece_state$"):
-            Piece("piece", "w", "K", Position(0, 0), "flying")
+            Piece(
+                "piece",
+                "w",
+                "K",
+                Position(0, 0),
+                "flying",  # pyright: ignore[reportArgumentType]
+            )
 
 
 if __name__ == "__main__":

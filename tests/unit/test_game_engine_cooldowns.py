@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+
 import unittest
 
 from kungfu_chess.model.position import Position
@@ -62,7 +64,7 @@ class TestCooldownStateTransitions(unittest.TestCase):
         self.assertEqual(piece.state, "idle")
 
     def test_partial_rest_remains_active(self) -> None:
-        engine, board = _engine(["wR . ."])
+        engine, _board = _engine(["wR . ."])
         engine.request_move(Position(0, 0), Position(0, 1))
         engine.wait(1000)
 
@@ -92,7 +94,7 @@ class TestCooldownStateTransitions(unittest.TestCase):
         self.assertEqual(board.get_piece(Position(0, 0)).state, "moving")
 
     def test_wait_exactly_ending_at_arrival_begins_rest_with_zero_elapsed(self) -> None:
-        engine, board = _engine(["wR . ."])
+        engine, _board = _engine(["wR . ."])
         engine.request_move(Position(0, 0), Position(0, 1))
 
         engine.wait(1000)
@@ -103,7 +105,7 @@ class TestCooldownStateTransitions(unittest.TestCase):
         self.assertEqual(rests[0].rest_kind, "long_rest")
 
     def test_wait_crossing_arrival_applies_remaining_time_to_rest(self) -> None:
-        engine, board = _engine(["wR . ."])
+        engine, _board = _engine(["wR . ."])
         engine.request_move(Position(0, 0), Position(0, 1))
 
         engine.wait(1500)
@@ -208,7 +210,7 @@ class TestCooldownConcurrency(unittest.TestCase):
 
 class TestCooldownBusyRejection(unittest.TestCase):
     def test_move_request_rejected_during_short_rest(self) -> None:
-        engine, board = _engine([". wK . ."])
+        engine, _board = _engine([". wK . ."])
         engine.jump(Position(0, 1))
         engine.wait(1000)
 
@@ -218,7 +220,7 @@ class TestCooldownBusyRejection(unittest.TestCase):
         self.assertEqual(result.reason, "piece_busy")
 
     def test_move_request_rejected_during_long_rest(self) -> None:
-        engine, board = _engine(["wR . . ."])
+        engine, _board = _engine(["wR . . ."])
         engine.request_move(Position(0, 0), Position(0, 1))
         engine.wait(1000)
 
@@ -250,7 +252,7 @@ class TestCooldownBusyRejection(unittest.TestCase):
         self.assertEqual(piece_before.state, "long_rest")
 
     def test_action_becomes_available_immediately_after_rest_completion(self) -> None:
-        engine, board = _engine([". wK . ."])
+        engine, _board = _engine([". wK . ."])
         engine.jump(Position(0, 1))
         engine.wait(1000)
         engine.wait(2000)

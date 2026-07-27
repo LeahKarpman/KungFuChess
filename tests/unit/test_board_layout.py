@@ -42,9 +42,11 @@ class TestBoardLayout(unittest.TestCase):
 
     def test_rejects_non_positive_cell_size(self) -> None:
         for cell_size in (0, -100):
-            with self.subTest(cell_size=cell_size):
-                with self.assertRaisesRegex(ValueError, "^invalid_cell_size$"):
-                    BoardLayout(cell_size=cell_size)
+            with (
+                self.subTest(cell_size=cell_size),
+                self.assertRaisesRegex(ValueError, "^invalid_cell_size$"),
+            ):
+                BoardLayout(cell_size=cell_size)
 
     def test_cell_center(self) -> None:
         layout = BoardLayout(cell_size=100)

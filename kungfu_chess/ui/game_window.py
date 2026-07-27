@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from ..engine.game_engine import GameEngine
 from ..game_config import load_game_config
-from ..input.board_mapper import BoardMapper, DEFAULT_CELL_SIZE
+from ..input.board_mapper import DEFAULT_CELL_SIZE, BoardMapper
 from ..input.controller import Controller
 from ..io.board_parser import parse_board
 from ..realtime.real_time_arbiter import RealTimeArbiter

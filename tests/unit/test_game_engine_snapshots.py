@@ -93,7 +93,7 @@ class TestGameEngineSnapshots(unittest.TestCase):
         snapshot = engine.snapshot()
 
         with self.assertRaises(AttributeError):
-            setattr(snapshot, "game_over", True)
+            setattr(snapshot, "game_over", True)  # noqa: B010
 
         with self.assertRaises(AttributeError):
-            setattr(snapshot.pieces[0], "state", "captured")
+            setattr(snapshot.pieces[0], "state", "captured")  # noqa: B010

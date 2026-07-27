@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false, reportOptionalSubscript=false
+
 from __future__ import annotations
 
 import unittest
@@ -541,9 +543,9 @@ class TestBoardRendererRest(unittest.TestCase):
             piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000
         )
         idle_sprite = Mock()
-        idle_sprite.img.shape = (42, 30, 4)
+        idle_sprite.pixels.shape = (42, 30, 4)
         resting_sprite = Mock()
-        resting_sprite.img.shape = (42, 30, 4)
+        resting_sprite.pixels.shape = (42, 30, 4)
 
         with (
             patch.object(

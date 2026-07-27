@@ -33,7 +33,7 @@ class Rest:
 
     def __post_init__(self) -> None:
         if isinstance(self.duration_ms, bool) or not isinstance(self.duration_ms, int):
-            raise ValueError(
+            raise TypeError(
                 f"Rest duration_ms must be an int, got {self.duration_ms!r}"
             )
         if self.duration_ms <= 0:

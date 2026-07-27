@@ -1,7 +1,8 @@
 import unittest
-from kungfu_chess.model.game_state import GameSnapshot, PieceSnapshot
+
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.io.board_printer import print_board, print_snapshot
+from kungfu_chess.model.game_state import GameSnapshot, PieceSnapshot
 from kungfu_chess.model.position import Position
 
 

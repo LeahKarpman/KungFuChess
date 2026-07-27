@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import unittest
 from unittest.mock import MagicMock, patch
-from kungfu_chess.input.controller import Controller
+
 from kungfu_chess.engine.game_engine import GameEngine, JumpResult, MoveResult
-from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
-from kungfu_chess.rules.rule_engine import RuleEngine
 from kungfu_chess.input.board_mapper import BoardMapper
+from kungfu_chess.input.controller import Controller
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.game_state import PieceSnapshot
 from kungfu_chess.model.position import Position
+from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
+from kungfu_chess.rules.rule_engine import RuleEngine
 
 
 def _setup(lines: list[str]) -> tuple[Controller, GameEngine]:

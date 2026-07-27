@@ -4,11 +4,10 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ..engine.game_engine import GameEngine
-from .board_mapper import BoardMapper
 from ..model.game_state import PieceSnapshot
 from ..model.piece import RESTING_STATES
 from ..model.position import Position
-
+from .board_mapper import BoardMapper
 
 ControllerAction = Literal[
     "ignored",

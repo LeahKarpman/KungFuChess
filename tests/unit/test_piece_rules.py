@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import unittest
-from kungfu_chess.rules import piece_rules
+
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.board import Board
 from kungfu_chess.model.position import Position
+from kungfu_chess.rules import piece_rules
 
 
 class TestRookRules(unittest.TestCase):

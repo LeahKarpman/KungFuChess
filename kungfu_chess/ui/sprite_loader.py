@@ -124,7 +124,7 @@ class SpriteLoader:
 
         is_loop = graphics["is_loop"]
         if not isinstance(is_loop, bool):
-            raise ValueError(
+            raise TypeError(
                 f"'is_loop' must be a boolean in {config_path}, got {is_loop!r}"
             )
 

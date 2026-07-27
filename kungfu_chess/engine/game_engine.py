@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..model.board import Board
-from ..model.piece import Piece
-from ..model.position import Position
 from ..model.events import (
     GameEvent,
     GameOver,
@@ -18,6 +16,8 @@ from ..model.events import (
     RestStarted,
 )
 from ..model.game_state import GameSnapshot, MotionSnapshot, PieceSnapshot, RestSnapshot
+from ..model.piece import Piece
+from ..model.position import Position
 from ..realtime.motion import ArrivalEvent
 from ..realtime.real_time_arbiter import RealTimeArbiter
 from ..realtime.rest import RestKind
@@ -79,9 +79,12 @@ class GameEngine:
             return MoveResult(ok=False, reason="piece_busy")
 
         jump = self._arbiter.active_jump_at(dst)
-        if jump is not None:
-            if piece is not None and piece.color == jump.piece_color:
-                return MoveResult(ok=False, reason="landing_reserved")
+        if (
+            jump is not None
+            and piece is not None
+            and piece.color == jump.piece_color
+        ):
+            return MoveResult(ok=False, reason="landing_reserved")
 
         validation = self._rules.validate_move(self._board, src, dst)
         if not validation.ok:

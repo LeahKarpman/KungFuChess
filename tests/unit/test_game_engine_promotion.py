@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+
 import unittest
 
 from kungfu_chess.model.position import Position

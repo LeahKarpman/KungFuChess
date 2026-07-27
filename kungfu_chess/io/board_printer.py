@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from ..model.game_state import GameSnapshot
 from ..model.board import Board
+from ..model.game_state import GameSnapshot
 from ..model.position import Position
 
 EMPTY = "."

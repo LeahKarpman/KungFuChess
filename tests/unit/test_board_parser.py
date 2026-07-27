@@ -1,4 +1,7 @@
+# pyright: reportOptionalMemberAccess=false
+
 import unittest
+
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.position import Position
 
@@ -34,9 +37,11 @@ class TestBoardParser(unittest.TestCase):
         invalid_tokens = ["xK", "wX", "K", "wKK"]
 
         for token in invalid_tokens:
-            with self.subTest(token=token):
-                with self.assertRaisesRegex(ValueError, "^UNKNOWN_TOKEN$"):
-                    parse_board([f"wK {token}"])
+            with (
+                self.subTest(token=token),
+                self.assertRaisesRegex(ValueError, "^UNKNOWN_TOKEN$"),
+            ):
+                parse_board([f"wK {token}"])
 
     def test_piece_id_format(self):
         board = parse_board(["wK ."])

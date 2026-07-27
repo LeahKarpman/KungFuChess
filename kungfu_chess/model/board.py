@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from .piece import Piece
 from .position import Position
 

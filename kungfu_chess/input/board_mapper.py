@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from ..model.position import Position
 
 DEFAULT_CELL_SIZE = 100

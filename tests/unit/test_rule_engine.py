@@ -1,10 +1,13 @@
+# pyright: reportOptionalMemberAccess=false
+
 from __future__ import annotations
 
 import unittest
 from unittest.mock import Mock, patch
-from kungfu_chess.rules.rule_engine import RuleEngine
+
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.position import Position
+from kungfu_chess.rules.rule_engine import RuleEngine
 
 
 class TestRuleEngineBoundary(unittest.TestCase):

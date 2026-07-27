@@ -13,7 +13,6 @@ from typing import Literal
 from ..model.piece import Piece
 from ..model.position import Position
 
-
 MS_PER_CELL = 1000
 ActionKind = Literal["move", "jump"]
 
@@ -52,7 +51,7 @@ class Motion:
 
     def __post_init__(self) -> None:
         if isinstance(self.duration_ms, bool) or not isinstance(self.duration_ms, int):
-            raise ValueError(
+            raise TypeError(
                 f"Motion duration_ms must be an int, got {self.duration_ms!r}"
             )
         if self.duration_ms <= 0:

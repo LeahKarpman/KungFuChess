@@ -1,3 +1,5 @@
+# pyright: reportOptionalMemberAccess=false
+
 from __future__ import annotations
 
 import json
@@ -295,7 +297,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
                 self._write_state("PW", state, [1], is_loop=value)
 
                 with self.assertRaisesRegex(
-                    ValueError,
+                    TypeError,
                     r"'is_loop' must be a boolean",
                 ):
                     loader.get_animation_frame("P", "w", state, 0)

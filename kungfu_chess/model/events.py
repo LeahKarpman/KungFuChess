@@ -8,7 +8,6 @@ GameEngine.consume_events().
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Union
 
 from .position import Position
 
@@ -105,14 +104,14 @@ class GameOver:
     winner_color: str
 
 
-GameEvent = Union[
-    MoveStarted,
-    MoveCompleted,
-    JumpStarted,
-    JumpCompleted,
-    PieceCaptured,
-    PiecePromoted,
-    RestStarted,
-    RestCompleted,
-    GameOver,
-]
+GameEvent = (
+    MoveStarted
+    | MoveCompleted
+    | JumpStarted
+    | JumpCompleted
+    | PieceCaptured
+    | PiecePromoted
+    | RestStarted
+    | RestCompleted
+    | GameOver
+)

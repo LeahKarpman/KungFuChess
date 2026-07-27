@@ -13,7 +13,7 @@ class TestRestSnapshot(unittest.TestCase):
         )
 
         with self.assertRaises(AttributeError):
-            setattr(rest, "elapsed_ms", 200)
+            setattr(rest, "elapsed_ms", 200)  # noqa: B010
 
     def test_rest_snapshot_exposes_kind_elapsed_and_duration(self) -> None:
         rest = RestSnapshot(
@@ -42,9 +42,9 @@ class TestGameSnapshotRests(unittest.TestCase):
         )
 
         with self.assertRaises(AttributeError):
-            setattr(snapshot, "rests", ())
+            setattr(snapshot, "rests", ())  # noqa: B010
         with self.assertRaises(AttributeError):
-            snapshot.rests.append(rest)
+            getattr(snapshot.rests, "append")(rest)  # noqa: B009
 
 
 if __name__ == "__main__":

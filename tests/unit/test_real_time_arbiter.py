@@ -1,14 +1,16 @@
+# pyright: reportOptionalMemberAccess=false
+
 import unittest
 
-from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
+from kungfu_chess.model.piece import Piece
+from kungfu_chess.model.position import Position
 from kungfu_chess.realtime.motion import Motion
+from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.realtime.rest import (
     DEFAULT_LONG_COOLDOWN_MS,
     DEFAULT_SHORT_COOLDOWN_MS,
     Rest,
 )
-from kungfu_chess.model.piece import Piece
-from kungfu_chess.model.position import Position
 
 
 class TestRealTimeArbiter(unittest.TestCase):
@@ -179,7 +181,7 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.assertFalse(hasattr(actions[0], "piece"))
 
         with self.assertRaises(AttributeError):
-            setattr(actions[0], "elapsed_ms", 500)
+            setattr(actions[0], "elapsed_ms", 500)  # noqa: B010
 
     def test_active_actions_include_moves_and_jumps(self) -> None:
         landing = Position(1, 1)
@@ -207,6 +209,7 @@ class TestRealTimeArbiter(unittest.TestCase):
         jump = self.arbiter.active_jump_at(landing)
 
         self.assertIsNotNone(jump)
+        assert jump is not None
         self.assertEqual(jump.piece_id, "wK_1_1")
 
     def test_jump_completes_after_one_cell_duration(self) -> None:
@@ -628,7 +631,7 @@ class TestTimedRecordValidation(unittest.TestCase):
             )
 
     def test_boolean_duration_motion_is_rejected(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             Motion(
                 piece=self.piece,
                 action_kind="move",
@@ -656,7 +659,7 @@ class TestTimedRecordValidation(unittest.TestCase):
             Rest(piece=self.piece, rest_kind="short_rest", duration_ms=-500)
 
     def test_boolean_duration_rest_is_rejected(self) -> None:
-        with self.assertRaises(ValueError):
+        with self.assertRaises(TypeError):
             Rest(piece=self.piece, rest_kind="short_rest", duration_ms=False)
 
     def test_positive_duration_rest_is_accepted(self) -> None:
@@ -680,4 +683,5 @@ class TestTimedRecordValidation(unittest.TestCase):
 
         boundary = arbiter.next_boundary_ms()
         self.assertIsNotNone(boundary)
+        assert boundary is not None
         self.assertGreater(boundary, 0)
