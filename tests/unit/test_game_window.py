@@ -229,6 +229,27 @@ class TestRunLoop(unittest.TestCase):
         self.assertEqual(renderer.render.call_count, 2)
         self.mock_is_window_open.assert_called_once_with("Kung-Fu Chess")
 
+    def test_game_over_frame_remains_visible_until_exit_key(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        game_over_snapshot = MagicMock(game_over=True)
+        engine.snapshot.return_value = game_over_snapshot
+        controller = _make_controller(selected=None)
+        clock_values = iter([0.0, 0.1, 0.2])
+        poll_key = MagicMock(side_effect=[-1, ord("q")])
+
+        run_loop(
+            engine,
+            renderer,
+            controller,
+            clock=lambda: next(clock_values),
+            poll_key=poll_key,
+        )
+
+        self.assertEqual(renderer.render.call_count, 2)
+        renderer.render.assert_called_with(game_over_snapshot, None)
+        self.mock_is_window_open.assert_called_once_with("Kung-Fu Chess")
+        self.mock_close_all_windows.assert_called_once()
+
     def test_exits_when_window_is_closed_with_x(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()

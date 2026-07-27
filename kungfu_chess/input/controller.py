@@ -41,10 +41,20 @@ class Controller:
 
         Selection is tracked by piece identity rather than by cell, so a
         selected piece that gets captured in place no longer leaves behind a
-        stale cell reference pointing at whatever piece now occupies it.
+        stale cell reference pointing at whatever piece now occupies it. A
+        terminal game also clears the controller-owned selection immediately.
         """
+        if self._clear_selection_if_game_over():
+            return None
         piece = self._find_selected(self._engine.snapshot().pieces)
         return piece.cell if piece is not None else None
+
+    def _clear_selection_if_game_over(self) -> bool:
+        """Clear controller-owned selection when the engine reports game over."""
+        if not self._engine.game_over:
+            return False
+        self._selected_piece_id = None
+        return True
 
     def _find_selected(
         self, pieces: tuple[PieceSnapshot, ...]
@@ -71,9 +81,13 @@ class Controller:
     def jump(self, x: int, y: int) -> ControllerResult:
         """Map a jump command to a board cell and delegate it to the engine.
 
-        Selection is cleared only when the engine accepts the jump, even if
-        the jumping piece is not the one currently selected.
+        During an active game, selection is cleared only when the engine
+        accepts the jump, even if the jumping piece is not the one currently
+        selected. Input is ignored once the game is over.
         """
+        if self._clear_selection_if_game_over():
+            return ControllerResult(action="ignored")
+
         pos = self._mapper.pixel_to_cell(x, y)
         if pos is None:
             return ControllerResult(action="ignored")
@@ -83,7 +97,10 @@ class Controller:
         return ControllerResult(action="jump_requested", position=pos)
 
     def click(self, x: int, y: int) -> ControllerResult:
-        """Interpret one pixel click without deciding move legality."""
+        """Interpret one active-game pixel click without deciding move legality."""
+        if self._clear_selection_if_game_over():
+            return ControllerResult(action="ignored")
+
         pos = self._mapper.pixel_to_cell(x, y)
 
         if pos is None:
