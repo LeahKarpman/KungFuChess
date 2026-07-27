@@ -283,6 +283,51 @@ class TestRunLoop(unittest.TestCase):
 
         self.mock_close_all_windows.assert_called_once()
 
+    def test_cleanup_runs_if_mouse_callback_setup_raises(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        error = RuntimeError("callback setup failed")
+        self.mock_set_mouse_callbacks.side_effect = error
+        clock = MagicMock()
+        poll_key = MagicMock()
+
+        with self.assertRaises(RuntimeError) as raised:
+            run_loop(
+                engine,
+                renderer,
+                controller,
+                clock=clock,
+                poll_key=poll_key,
+            )
+
+        self.assertIs(raised.exception, error)
+        self.mock_close_all_windows.assert_called_once()
+        engine.wait.assert_not_called()
+        engine.snapshot.assert_not_called()
+        renderer.render.assert_not_called()
+        poll_key.assert_not_called()
+
+    def test_cleanup_runs_if_initial_clock_raises(self) -> None:
+        engine, renderer = _make_engine_and_renderer()
+        controller = _make_controller()
+        error = RuntimeError("initial clock failed")
+        clock = MagicMock(side_effect=error)
+        poll_key = MagicMock()
+
+        with self.assertRaises(RuntimeError) as raised:
+            run_loop(
+                engine,
+                renderer,
+                controller,
+                clock=clock,
+                poll_key=poll_key,
+            )
+
+        self.assertIs(raised.exception, error)
+        self.mock_close_all_windows.assert_called_once()
+        engine.wait.assert_not_called()
+        renderer.render.assert_not_called()
+
     def test_does_not_open_a_real_window(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
