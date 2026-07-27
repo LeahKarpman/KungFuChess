@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from kungfu_chess.input.controller import Controller
 from kungfu_chess.engine.game_engine import GameEngine, JumpResult, MoveResult
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
@@ -18,6 +18,23 @@ def _setup(lines: list[str]) -> tuple[Controller, GameEngine]:
     engine = GameEngine(board, RuleEngine(), RealTimeArbiter())
     mapper = BoardMapper(board.width, board.height)
     controller = Controller(mapper, engine)
+    return controller, engine
+
+
+def _mock_engine() -> MagicMock:
+    """Build an active-game engine mock with the public game-over flag set."""
+    engine = MagicMock(spec=GameEngine)
+    engine.game_over = False
+    return engine
+
+
+def _finish_game_with_existing_selection() -> tuple[Controller, GameEngine]:
+    """End a real game while the controller still owns a selection."""
+    controller, engine = _setup(["wR . bR . wK"])
+    controller.click(50, 50)
+    engine.request_move(Position(0, 2), Position(0, 4))
+    engine.wait(2000)
+    assert engine.game_over
     return controller, engine
 
 
@@ -65,7 +82,7 @@ class TestController(unittest.TestCase):
         self.assertIsNone(controller.selected)
 
     def test_clicking_selected_piece_does_not_request_move(self) -> None:
-        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine = _mock_engine()
         mock_engine.snapshot.return_value = MagicMock(
             pieces=(
                 PieceSnapshot(
@@ -107,7 +124,7 @@ class TestController(unittest.TestCase):
         self.assertEqual(controller.selected, Position(0, 1))
 
     def test_second_inboard_click_sends_move_and_clears_selection(self) -> None:
-        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine = _mock_engine()
         mock_engine.snapshot.return_value = MagicMock(
             pieces=[MagicMock(cell=Position(0, 0))]
         )
@@ -132,7 +149,7 @@ class TestController(unittest.TestCase):
         actually starts; this supersedes the old expectation that selection
         was cleared regardless of validity.
         """
-        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine = _mock_engine()
         mock_engine.snapshot.return_value = MagicMock(
             pieces=[MagicMock(cell=Position(0, 0))]
         )
@@ -187,7 +204,7 @@ class TestController(unittest.TestCase):
 
     def test_jump_maps_pixels_and_delegates_to_engine(self) -> None:
         """Forward an in-board jump request without applying game rules."""
-        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine = _mock_engine()
         mock_engine.jump.return_value = JumpResult(ok=True, reason="ok")
         controller = Controller(BoardMapper(3, 3), mock_engine)
 
@@ -198,7 +215,7 @@ class TestController(unittest.TestCase):
         mock_engine.jump.assert_called_once_with(Position(2, 1))
 
     def test_jump_does_not_call_snapshot_to_decide_legality(self) -> None:
-        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine = _mock_engine()
         mock_engine.jump.return_value = JumpResult(ok=True, reason="ok")
         controller = Controller(BoardMapper(3, 3), mock_engine)
 
@@ -208,7 +225,7 @@ class TestController(unittest.TestCase):
 
     def test_jump_outside_board_is_ignored(self) -> None:
         """Reject an out-of-board jump before it reaches the game engine."""
-        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine = _mock_engine()
         controller = Controller(BoardMapper(3, 3), mock_engine)
 
         result = controller.jump(-1, 50)
@@ -219,7 +236,7 @@ class TestController(unittest.TestCase):
     def test_right_click_outside_board_preserves_selection_and_does_not_call_engine(
         self,
     ) -> None:
-        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine = _mock_engine()
         mock_engine.snapshot.return_value = MagicMock(
             pieces=[MagicMock(cell=Position(0, 0))]
         )
@@ -255,7 +272,7 @@ class TestController(unittest.TestCase):
         self.assertIsNone(controller.selected)
 
     def test_rejected_jump_preserves_current_selection(self) -> None:
-        mock_engine = MagicMock(spec=GameEngine)
+        mock_engine = _mock_engine()
         mock_engine.snapshot.return_value = MagicMock(
             pieces=[MagicMock(cell=Position(0, 0))]
         )
@@ -291,6 +308,63 @@ class TestController(unittest.TestCase):
 
         self.assertEqual(result.action, "jump_requested")
         self.assertEqual(controller.selected, Position(0, 2))
+
+
+class TestControllerGameOver(unittest.TestCase):
+    """Verify that terminal games ignore input without mutating engine state."""
+
+    def test_existing_selection_clears_when_selected_is_next_read(self) -> None:
+        controller, engine = _finish_game_with_existing_selection()
+
+        self.assertIsNone(controller.selected)
+        self.assertTrue(engine.game_over)
+
+    def test_left_click_on_piece_or_empty_cell_does_not_select(self) -> None:
+        controller, _ = _finish_game_with_existing_selection()
+
+        piece_result = controller.click(50, 50)
+        empty_cell_result = controller.click(150, 50)
+
+        self.assertEqual(piece_result.action, "ignored")
+        self.assertEqual(empty_cell_result.action, "ignored")
+        self.assertIsNone(controller.selected)
+
+    def test_left_click_does_not_request_move_or_change_engine_state(self) -> None:
+        controller, engine = _finish_game_with_existing_selection()
+        engine.consume_events()
+        snapshot_before = engine.snapshot()
+
+        with patch.object(
+            engine, "request_move", wraps=engine.request_move
+        ) as request_move:
+            result = controller.click(150, 50)
+
+        self.assertEqual(result.action, "ignored")
+        request_move.assert_not_called()
+        self.assertEqual(engine.snapshot(), snapshot_before)
+        self.assertEqual(engine.consume_events(), ())
+
+    def test_right_click_does_not_request_jump_or_change_engine_state(self) -> None:
+        controller, engine = _finish_game_with_existing_selection()
+        engine.consume_events()
+        snapshot_before = engine.snapshot()
+
+        with patch.object(engine, "jump", wraps=engine.jump) as jump:
+            result = controller.jump(50, 50)
+
+        self.assertEqual(result.action, "ignored")
+        jump.assert_not_called()
+        self.assertEqual(engine.snapshot(), snapshot_before)
+        self.assertEqual(engine.consume_events(), ())
+
+    def test_left_click_selects_piece_while_game_is_active(self) -> None:
+        controller, engine = _setup(["wR . ."])
+
+        result = controller.click(50, 50)
+
+        self.assertFalse(engine.game_over)
+        self.assertEqual(result.action, "selected")
+        self.assertEqual(controller.selected, Position(0, 0))
 
 
 class TestControllerCooldownSelection(unittest.TestCase):
