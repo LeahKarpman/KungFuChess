@@ -91,7 +91,7 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.assertEqual(second[0].destination, Position(0, 2))
         self.assertTrue(second[0].is_final)
 
-    def test_knight_transit_advances_visual_segments_but_emits_only_final_arrival(
+    def test_knight_transit_exposes_one_direct_visual_segment_and_one_arrival(
         self,
     ) -> None:
         source = Position(0, 0)
@@ -101,18 +101,24 @@ class TestRealTimeArbiter(unittest.TestCase):
 
         first_segment = self.arbiter.active_actions()[0]
         self.assertEqual(first_segment.source, Position(0, 0))
-        self.assertEqual(first_segment.destination, Position(1, 0))
+        self.assertEqual(first_segment.destination, destination)
+        self.assertEqual(first_segment.elapsed_ms, 0)
+        self.assertEqual(first_segment.duration_ms, 3000)
 
         self.assertEqual(self.arbiter.advance_time(1000), [])
         second_segment = self.arbiter.active_actions()[0]
-        self.assertEqual(second_segment.source, Position(1, 0))
-        self.assertEqual(second_segment.destination, Position(2, 0))
+        self.assertEqual(second_segment.source, source)
+        self.assertEqual(second_segment.destination, destination)
+        self.assertEqual(second_segment.elapsed_ms, 1000)
+        self.assertEqual(second_segment.duration_ms, 3000)
         self.assertEqual(second_segment.action_elapsed_ms, 1000)
 
         self.assertEqual(self.arbiter.advance_time(1000), [])
         final_segment = self.arbiter.active_actions()[0]
-        self.assertEqual(final_segment.source, Position(2, 0))
+        self.assertEqual(final_segment.source, source)
         self.assertEqual(final_segment.destination, destination)
+        self.assertEqual(final_segment.elapsed_ms, 2000)
+        self.assertEqual(final_segment.duration_ms, 3000)
         self.assertEqual(final_segment.action_elapsed_ms, 2000)
 
         events = self.arbiter.advance_time(1000)

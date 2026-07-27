@@ -253,6 +253,46 @@ class TestBoardRendererMotion(unittest.TestCase):
         # Halfway between row 6 (y=650) and row 5 (y=550) is y=600, at col 0 (x=50).
         self.assertFalse((frame.img[600, 50] == baseline.img[600, 50]).all())
 
+    def test_knight_moves_directly_from_source_center_to_destination_center(
+        self,
+    ) -> None:
+        piece = PieceSnapshot(
+            id="wN_1_1", color="w", kind="N", cell=Position(1, 1), state="moving"
+        )
+        expected_centers = (
+            (0, (150.0, 150.0)),
+            (1500, (200.0, 250.0)),
+            (3000, (250.0, 350.0)),
+        )
+
+        for elapsed_ms, expected_center in expected_centers:
+            with self.subTest(elapsed_ms=elapsed_ms):
+                motion = MotionSnapshot(
+                    piece_id="wN_1_1",
+                    source=Position(1, 1),
+                    destination=Position(3, 2),
+                    elapsed_ms=elapsed_ms,
+                    duration_ms=3000,
+                    action_kind="move",
+                    action_elapsed_ms=elapsed_ms,
+                )
+                sprite = Mock()
+                sprite.pixels.shape = (64, 64, 4)
+
+                with patch.object(
+                    self.sprite_loader,
+                    "get_animation_frame",
+                    return_value=sprite,
+                ):
+                    self.renderer.render(_snapshot([piece], motions=[motion]))
+
+                expected_xy = self.layout.centered_top_left_at_point(
+                    expected_center,
+                    64,
+                    64,
+                )
+                self.assertEqual(sprite.draw_on.call_args.args[1:], expected_xy)
+
     def test_move_motion_uses_move_animation_state(self) -> None:
         piece = PieceSnapshot(
             id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving"
