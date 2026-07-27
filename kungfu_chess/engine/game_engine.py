@@ -201,14 +201,22 @@ class GameEngine:
             return
 
         piece = event.piece
-        # See the matching comment in _apply_jump_arrival.
-        self._arbiter.resolve_arrival(piece.id)
-
         if self._board.get_piece(event.source) is not piece:
             return
 
         target = self._board.get_piece(event.destination)
         if target is not None and target.color == piece.color:
+            self._arbiter.stop_motion(piece.id)
+            self._emit(
+                MoveCompleted(
+                    piece_id=piece.id,
+                    piece_kind=piece.kind,
+                    piece_color=piece.color,
+                    source=event.original_source or event.source,
+                    destination=event.source,
+                )
+            )
+            self._start_rest_if_alive(piece, "long_rest", event.leftover_ms)
             return
 
         winner_color = None
@@ -216,12 +224,22 @@ class GameEngine:
             winner_color = self._capture_piece(target, event.destination, piece)
 
         self._board.move_piece(event.source, event.destination)
+
+        if winner_color is not None and not event.is_final:
+            self._arbiter.stop_motion(piece.id)
+            self._emit(GameOver(winner_color=winner_color))
+            return
+
+        self._arbiter.resolve_arrival(piece.id)
+        if not event.is_final:
+            return
+
         self._emit(
             MoveCompleted(
                 piece_id=piece.id,
                 piece_kind=piece.kind,
                 piece_color=piece.color,
-                source=event.source,
+                source=event.original_source or event.source,
                 destination=event.destination,
             )
         )
@@ -320,6 +338,7 @@ class GameEngine:
                 elapsed_ms=action.elapsed_ms,
                 duration_ms=action.duration_ms,
                 action_kind=action.action_kind,
+                action_elapsed_ms=action.action_elapsed_ms,
             )
             for action in active_actions
         )

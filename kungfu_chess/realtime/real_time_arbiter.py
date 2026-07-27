@@ -91,10 +91,10 @@ class RealTimeArbiter:
         )
 
     def next_boundary_ms(self) -> int | None:
-        """Return the simulated time until the nearest motion or rest completion.
+        """Return simulated time until the nearest cell boundary or rest completion.
 
         Returns None when nothing is left to advance toward. A completed
-        motion still awaiting resolve_arrival has nothing left to count
+        segment still awaiting resolve_arrival has nothing left to count
         down — it is excluded so it can never manufacture a zero-length
         boundary; only strictly positive remaining times are considered.
         GameEngine advances time in steps of at most this size so that an
@@ -110,14 +110,14 @@ class RealTimeArbiter:
     def advance_time(self, ms: int) -> list[ArrivalEvent]:
         """Advance every action and rest, returning arrival events in resolution order.
 
-        A motion that reaches completion is reported here but left in place
+        A motion that reaches a cell boundary is reported here but left in place
         — still busy, still returned by active_actions — until the caller
         acknowledges it via resolve_arrival. This lets a caller that cannot
         yet apply a given arrival (GameOver was decided by an earlier
         arrival in the same batch) leave it validly represented instead of
         finalizing it and then discarding the outcome.
 
-        A motion already complete when this call starts is skipped
+        A motion already at a boundary when this call starts is skipped
         entirely — inert until resolve_arrival is called. Otherwise it
         would keep accumulating elapsed_ms past its own duration and keep
         re-emitting the same ArrivalEvent on every subsequent call.
@@ -130,13 +130,13 @@ class RealTimeArbiter:
         completed: list[tuple[int, int, int, ArrivalEvent]] = []
 
         for motion in self._motions.values():
-            if motion.is_complete():
+            if motion.is_waiting_at_boundary():
                 continue
 
             remaining_ms = motion.remaining_ms()
             motion.advance(ms)
 
-            if not motion.is_complete():
+            if not motion.is_waiting_at_boundary():
                 continue
 
             completed.append(
@@ -146,10 +146,13 @@ class RealTimeArbiter:
                     motion.sequence,
                     ArrivalEvent(
                         piece=motion.piece,
-                        source=motion.source,
-                        destination=motion.destination,
+                        source=motion.current_cell,
+                        destination=motion.next_cell,
                         action_kind=motion.action_kind,
                         leftover_ms=ms - remaining_ms,
+                        original_source=motion.origin,
+                        requested_destination=motion.requested_destination,
+                        is_final=motion.is_final_boundary(),
                     ),
                 )
             )
@@ -158,21 +161,28 @@ class RealTimeArbiter:
         return [event for _, _, _, event in completed]
 
     def resolve_arrival(self, piece_id: str) -> None:
-        """Finalize a motion whose completion the caller has fully handled.
+        """Accept a boundary after the caller has applied its board effects.
 
-        Removes it from scheduling and returns its piece to idle. A no-op
-        for an unknown piece_id or a motion that has not yet completed, so
-        callers can call it unconditionally once they decide an arrival's
-        outcome.
+        An intermediate acceptance prepares the next route segment. A final
+        acceptance removes the motion and returns its piece to idle. This is
+        a no-op for an unknown piece or a motion not waiting at a boundary.
         """
         motion = self._motions.get(piece_id)
-        if motion is None or not motion.is_complete():
+        if motion is None or not motion.is_waiting_at_boundary():
+            return
+
+        if not motion.accept_boundary():
             return
 
         if motion.piece.state == "moving":
             motion.piece.state = "idle"
-
         del self._motions[piece_id]
+
+    def stop_motion(self, piece_id: str) -> None:
+        """Stop a motion at its current safe cell after a blocked arrival."""
+        motion = self._motions.pop(piece_id, None)
+        if motion is not None and motion.piece.state == "moving":
+            motion.piece.state = "idle"
 
     def _advance_rests(self, ms: int) -> None:
         """Advance every active cooldown, returning completed pieces to idle.
@@ -270,13 +280,15 @@ class RealTimeArbiter:
     @staticmethod
     def _to_active_action(motion: Motion) -> ActiveAction:
         """Convert an internal Motion into its immutable external view."""
+        assert motion.current_cell is not None
         return ActiveAction(
             piece_id=motion.piece.id,
             piece_color=motion.piece.color,
             piece_kind=motion.piece.kind,
             action_kind=motion.action_kind,
-            source=motion.source,
-            destination=motion.destination,
-            duration_ms=motion.duration_ms,
-            elapsed_ms=motion.elapsed_ms,
+            source=motion.current_cell,
+            destination=motion.next_cell,
+            duration_ms=motion.segment_duration_ms(),
+            elapsed_ms=motion.segment_elapsed_ms,
+            action_elapsed_ms=motion.elapsed_ms,
         )

@@ -275,6 +275,29 @@ class TestBoardRendererMotion(unittest.TestCase):
 
         spy.assert_called_once_with("P", "w", "move", 0)
 
+    def test_segment_interpolation_keeps_total_elapsed_for_animation(self) -> None:
+        piece = PieceSnapshot(
+            id="wR_0_1", color="w", kind="R", cell=Position(0, 1), state="moving"
+        )
+        motion = MotionSnapshot(
+            piece_id="wR_0_1",
+            source=Position(0, 1),
+            destination=Position(0, 2),
+            elapsed_ms=500,
+            duration_ms=1000,
+            action_kind="move",
+            action_elapsed_ms=1500,
+        )
+
+        with patch.object(
+            self.sprite_loader,
+            "get_animation_frame",
+            wraps=self.sprite_loader.get_animation_frame,
+        ) as spy:
+            self.renderer.render(_snapshot([piece], motions=[motion]))
+
+        spy.assert_called_once_with("R", "w", "move", 1500)
+
     def test_jump_motion_uses_jump_animation_state(self) -> None:
         piece = PieceSnapshot(
             id="wP_6_0", color="w", kind="P", cell=Position(6, 0), state="moving"

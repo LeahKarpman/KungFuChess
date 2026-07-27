@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.board import Board
+from kungfu_chess.model.events import MoveCompleted, RestStarted
 from kungfu_chess.model.position import Position
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.rules.rule_engine import MoveValidation, RuleEngine
@@ -223,3 +224,43 @@ class TestMoveCompletion(unittest.TestCase):
             piece for piece in engine.snapshot().pieces if piece.id == moving_piece.id
         )
         self.assertEqual(snapshot_piece.cell, destination)
+
+    def test_intermediate_step_emits_no_completion_and_starts_no_rest(self) -> None:
+        engine, board = _engine(["wR . . ."])
+        piece = board.get_piece(Position(0, 0))
+        engine.request_move(Position(0, 0), Position(0, 3))
+        engine.consume_events()
+
+        engine.wait(1000)
+
+        self.assertIs(board.get_piece(Position(0, 1)), piece)
+        self.assertEqual(piece.state, "moving")
+        self.assertEqual(engine.consume_events(), ())
+        self.assertEqual(engine.snapshot().rests, ())
+
+    def test_large_wait_crosses_all_cell_boundaries_in_order(self) -> None:
+        engine, board = _engine(["wR . . . ."])
+        piece = board.get_piece(Position(0, 0))
+        engine.request_move(Position(0, 0), Position(0, 4))
+        engine.consume_events()
+
+        engine.wait(4000)
+
+        self.assertIs(board.get_piece(Position(0, 4)), piece)
+        self.assertEqual(
+            engine.consume_events(),
+            (
+                MoveCompleted(
+                    piece_id=piece.id,
+                    piece_kind="R",
+                    piece_color="w",
+                    source=Position(0, 0),
+                    destination=Position(0, 4),
+                ),
+                RestStarted(
+                    piece_id=piece.id,
+                    rest_kind="long_rest",
+                    duration_ms=10000,
+                ),
+            ),
+        )

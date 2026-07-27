@@ -19,7 +19,7 @@ class TestTextScripts(unittest.TestCase):
         self.assertEqual(out, "wK .\n. bK\n")
 
     # ── Iteration 5 ──────────────────────────────────────────────────────────
-    def test_move_before_arrival_board_unchanged(self):
+    def test_move_updates_board_at_first_cell_boundary(self):
         lines = [
             "Board",
             ". wR .",
@@ -31,7 +31,7 @@ class TestTextScripts(unittest.TestCase):
             "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, ". wR .\n. . .\n. . bK\n")
+        self.assertEqual(out, ". . .\n. wR .\n. . bK\n")
 
     def test_move_after_arrival_board_updated(self):
         lines = [
@@ -47,7 +47,7 @@ class TestTextScripts(unittest.TestCase):
             "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, ". wR .\n. . .\n. . bK\n. . .\n. . .\n. wR bK\n")
+        self.assertEqual(out, ". . .\n. wR .\n. . bK\n. . .\n. . .\n. wR bK\n")
 
     def test_second_move_while_motion_active_rejected(self):
         # A moving piece cannot be redirected before it arrives.

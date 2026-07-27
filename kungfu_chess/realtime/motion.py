@@ -17,6 +17,54 @@ MS_PER_CELL = 1000
 ActionKind = Literal["move", "jump"]
 
 
+def calculate_route(
+    piece_kind: str,
+    source: Position,
+    destination: Position,
+) -> tuple[Position, ...]:
+    """Return the ordered board cells crossed by one legal move.
+
+    This function describes timing geometry only. The rules layer remains
+    responsible for deciding whether the requested move is legal.
+    """
+    dr = destination.row - source.row
+    dc = destination.col - source.col
+
+    if piece_kind == "N":
+        route: list[Position] = []
+        row, col = source.row, source.col
+        row_step = _sign(dr)
+        col_step = _sign(dc)
+        if abs(dr) == 2:
+            for _ in range(2):
+                row += row_step
+                route.append(Position(row, col))
+            col += col_step
+            route.append(Position(row, col))
+        else:
+            for _ in range(2):
+                col += col_step
+                route.append(Position(row, col))
+            row += row_step
+            route.append(Position(row, col))
+        return tuple(route)
+
+    if piece_kind == "K":
+        return (destination,)
+
+    distance = max(abs(dr), abs(dc))
+    row_step = _sign(dr)
+    col_step = _sign(dc)
+    return tuple(
+        Position(source.row + row_step * step, source.col + col_step * step)
+        for step in range(1, distance + 1)
+    )
+
+
+def _sign(value: int) -> int:
+    return (value > 0) - (value < 0)
+
+
 def travel_duration_ms(
     piece_kind: str,
     source: Position,
@@ -24,13 +72,9 @@ def travel_duration_ms(
 ) -> int:
     """Calculate movement duration from the piece's board-cell route.
 
-    Knights travel their L-shaped route as the sum of the row and column
-    deltas; every other piece travels the straight-line cell distance.
+    Every route cell takes exactly one cell-duration to reach.
     """
-    dr = abs(destination.row - source.row)
-    dc = abs(destination.col - source.col)
-    distance = dr + dc if piece_kind == "N" else max(dr, dc)
-    return distance * MS_PER_CELL
+    return len(calculate_route(piece_kind, source, destination)) * MS_PER_CELL
 
 
 @dataclass
@@ -48,6 +92,10 @@ class Motion:
     duration_ms: int
     elapsed_ms: int = 0
     sequence: int = 0
+    route: tuple[Position, ...] = ()
+    current_cell: Position | None = None
+    route_index: int = 0
+    segment_elapsed_ms: int = 0
 
     def __post_init__(self) -> None:
         if isinstance(self.duration_ms, bool) or not isinstance(self.duration_ms, int):
@@ -58,18 +106,73 @@ class Motion:
             raise ValueError(
                 f"Motion duration_ms must be positive, got {self.duration_ms!r}"
             )
+        if not self.route:
+            self.route = (
+                (self.destination,)
+                if self.action_kind == "jump"
+                else calculate_route(self.piece.kind, self.source, self.destination)
+            )
+        if not self.route:
+            raise ValueError("Motion route must contain at least one cell")
+        if self.current_cell is None:
+            self.current_cell = self.source
+
+    @property
+    def origin(self) -> Position:
+        """Return the immutable source of the whole requested action."""
+        return self.source
+
+    @property
+    def requested_destination(self) -> Position:
+        """Return the immutable destination of the whole requested action."""
+        return self.destination
+
+    @property
+    def next_cell(self) -> Position:
+        """Return the route cell at the pending boundary."""
+        return self.route[self.route_index]
+
+    def segment_duration_ms(self) -> int:
+        """Return the duration of the current render/timing segment."""
+        return self.duration_ms if self.action_kind == "jump" else MS_PER_CELL
 
     def advance(self, ms: int) -> None:
-        """Add simulated time to this motion's elapsed duration."""
-        self.elapsed_ms += ms
+        """Advance toward, but never beyond, the pending cell boundary."""
+        applied_ms = min(ms, self.remaining_ms())
+        self.elapsed_ms += applied_ms
+        self.segment_elapsed_ms += applied_ms
 
     def remaining_ms(self) -> int:
-        """Return the simulated time left before completion, floored at zero."""
-        return max(self.duration_ms - self.elapsed_ms, 0)
+        """Return simulated time left before the next cell boundary."""
+        return max(self.segment_duration_ms() - self.segment_elapsed_ms, 0)
+
+    def is_waiting_at_boundary(self) -> bool:
+        """Return whether GameEngine must decide the pending cell arrival."""
+        return self.segment_elapsed_ms >= self.segment_duration_ms()
 
     def is_complete(self) -> bool:
-        """Return whether this motion has reached or passed its full duration."""
-        return self.elapsed_ms >= self.duration_ms
+        """Return whether the pending boundary is the requested destination."""
+        return self.is_waiting_at_boundary() and self.is_final_boundary()
+
+    def is_final_boundary(self) -> bool:
+        return self.route_index == len(self.route) - 1
+
+    def accept_boundary(self) -> bool:
+        """Commit current progress after GameEngine accepts entry.
+
+        Returns True at the final route cell. Otherwise prepares the next
+        one-cell segment while preserving the whole action's source.
+        """
+        if not self.is_waiting_at_boundary():
+            return False
+
+        self.current_cell = self.next_cell
+        if self.is_final_boundary():
+            return True
+
+        self.route_index += 1
+        self.segment_elapsed_ms = 0
+        return False
 
 
 @dataclass(frozen=True)
@@ -88,14 +191,18 @@ class ActiveAction:
     destination: Position
     duration_ms: int
     elapsed_ms: int
+    action_elapsed_ms: int | None = None
 
 
 @dataclass(frozen=True)
 class ArrivalEvent:
-    """Immutable event describing a timed action that has reached its destination."""
+    """Immutable event describing a timed action at one cell boundary."""
 
     piece: Piece
     source: Position
     destination: Position
     action_kind: ActionKind = "move"
     leftover_ms: int = 0
+    original_source: Position | None = None
+    requested_destination: Position | None = None
+    is_final: bool = True

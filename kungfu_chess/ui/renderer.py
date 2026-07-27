@@ -174,7 +174,14 @@ class BoardRenderer:
         point = lerp_point(source_center, destination_center, progress)
 
         sprite = self._sprite_loader.get_animation_frame(
-            piece.kind, piece.color, motion.action_kind, motion.elapsed_ms
+            piece.kind,
+            piece.color,
+            motion.action_kind,
+            (
+                motion.elapsed_ms
+                if motion.action_elapsed_ms is None
+                else motion.action_elapsed_ms
+            ),
         )
         sprite_height, sprite_width = sprite.pixels.shape[:2]
         x, y = self._layout.centered_top_left_at_point(

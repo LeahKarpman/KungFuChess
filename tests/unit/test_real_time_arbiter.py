@@ -4,7 +4,7 @@ import unittest
 
 from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
-from kungfu_chess.realtime.motion import Motion
+from kungfu_chess.realtime.motion import Motion, calculate_route
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.realtime.rest import (
     DEFAULT_LONG_COOLDOWN_MS,
@@ -72,30 +72,43 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].piece.id, self.piece.id)
 
-    def test_two_cell_move_takes_2000ms(self) -> None:
+    def test_two_cell_move_reports_each_cell_boundary(self) -> None:
         self.arbiter.start_motion(
             self.piece,
             Position(0, 0),
             Position(0, 2),
         )
 
-        self.assertEqual(self.arbiter.advance_time(1999), [])
-        events = self.arbiter.advance_time(1)
+        first = self.arbiter.advance_time(1000)
+        self.assertEqual(first[0].source, Position(0, 0))
+        self.assertEqual(first[0].destination, Position(0, 1))
+        self.assertFalse(first[0].is_final)
 
-        self.assertEqual(len(events), 1)
+        self.arbiter.resolve_arrival(self.piece.id)
+        second = self.arbiter.advance_time(1000)
 
-    def test_knight_move_takes_3000ms(self) -> None:
+        self.assertEqual(second[0].source, Position(0, 1))
+        self.assertEqual(second[0].destination, Position(0, 2))
+        self.assertTrue(second[0].is_final)
+
+    def test_knight_move_reports_three_axis_ordered_boundaries(self) -> None:
         """Measure a knight's L-shaped route as three cell transitions."""
         source = Position(0, 0)
         destination = Position(2, 1)
         knight = Piece("wN_0_0", "w", "N", source)
         self.arbiter.start_motion(knight, source, destination)
 
-        self.assertEqual(self.arbiter.advance_time(2999), [])
-        events = self.arbiter.advance_time(1)
+        destinations = []
+        for _ in range(3):
+            event = self.arbiter.advance_time(1000)[0]
+            destinations.append(event.destination)
+            self.arbiter.resolve_arrival(knight.id)
 
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].piece.id, knight.id)
+        self.assertEqual(
+            destinations,
+            [Position(1, 0), Position(2, 0), Position(2, 1)],
+        )
+        self.assertFalse(self.arbiter.is_piece_busy(knight.id))
 
     def test_multiple_waits_accumulate(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
@@ -357,6 +370,52 @@ class TestRealTimeArbiter(unittest.TestCase):
         self.assertIsNone(self.arbiter.next_boundary_ms())
 
 
+class TestRouteCalculation(unittest.TestCase):
+    """Verify pure route geometry without involving board legality."""
+
+    def test_slider_route_contains_every_cell_through_destination(self) -> None:
+        expected = (
+            Position(1, 1),
+            Position(2, 2),
+            Position(3, 3),
+        )
+
+        for piece_kind in ("B", "Q"):
+            with self.subTest(piece_kind=piece_kind):
+                self.assertEqual(
+                    calculate_route(
+                        piece_kind,
+                        Position(0, 0),
+                        Position(3, 3),
+                    ),
+                    expected,
+                )
+
+        self.assertEqual(
+            calculate_route("R", Position(2, 3), Position(2, 0)),
+            (Position(2, 2), Position(2, 1), Position(2, 0)),
+        )
+
+    def test_king_and_single_step_pawn_routes_contain_only_destination(self) -> None:
+        source = Position(4, 4)
+        destination = Position(3, 4)
+
+        self.assertEqual(calculate_route("K", source, destination), (destination,))
+        self.assertEqual(calculate_route("P", source, destination), (destination,))
+
+    def test_initial_pawn_double_step_contains_intermediate_cell(self) -> None:
+        self.assertEqual(
+            calculate_route("P", Position(6, 2), Position(4, 2)),
+            (Position(5, 2), Position(4, 2)),
+        )
+
+    def test_knight_uses_two_cell_axis_first_with_direction_signs(self) -> None:
+        self.assertEqual(
+            calculate_route("N", Position(5, 5), Position(4, 3)),
+            (Position(5, 4), Position(5, 3), Position(4, 3)),
+        )
+
+
 class TestRealTimeArbiterCooldown(unittest.TestCase):
     """Verify per-piece rest scheduling, busy semantics, and time carry-over."""
 
@@ -583,7 +642,7 @@ class TestArrivalResolutionProtocol(unittest.TestCase):
 
         # The still-pending motion's own remaining time is reported; the
         # completed-and-inert one is excluded, not treated as a 0 boundary.
-        self.assertEqual(self.arbiter.next_boundary_ms(), 2000)
+        self.assertEqual(self.arbiter.next_boundary_ms(), 1000)
 
     def test_completed_unresolved_motion_remains_observable_until_resolved(self) -> None:
         self.arbiter.start_motion(self.piece, self.src, self.dst)
