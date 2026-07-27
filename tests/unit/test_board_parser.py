@@ -1,12 +1,12 @@
 # pyright: reportOptionalMemberAccess=false
 
-import unittest
+import pytest
 
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.position import Position
 
 
-class TestBoardParser(unittest.TestCase):
+class TestBoardParser:
     def test_valid_board(self):
         lines = [
             "wR wN wB wQ wK wB wN wR",
@@ -19,31 +19,26 @@ class TestBoardParser(unittest.TestCase):
             "bR bN bB bQ bK bB bN bR",
         ]
         board = parse_board(lines)
-        self.assertEqual(board.width, 8)
-        self.assertEqual(board.height, 8)
+        assert board.width == 8
+        assert board.height == 8
         piece = board.get_piece(Position(0, 0))
-        self.assertEqual(piece.color, "w")
-        self.assertEqual(piece.kind, "R")
+        assert piece.color == "w"
+        assert piece.kind == "R"
 
     def test_empty_cell(self):
         board = parse_board([". .", ". ."])
-        self.assertIsNone(board.get_piece(Position(0, 0)))
+        assert board.get_piece(Position(0, 0)) is None
 
     def test_inconsistent_row_raises(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             parse_board(["wK wQ", "bK"])
 
-    def test_invalid_token_raises(self):
-        invalid_tokens = ["xK", "wX", "K", "wKK"]
-
-        for token in invalid_tokens:
-            with (
-                self.subTest(token=token),
-                self.assertRaisesRegex(ValueError, "^UNKNOWN_TOKEN$"),
-            ):
-                parse_board([f"wK {token}"])
+    @pytest.mark.parametrize("token", ["xK", "wX", "K", "wKK"])
+    def test_invalid_token_raises(self, token: str):
+        with pytest.raises(ValueError, match="^UNKNOWN_TOKEN$"):
+            parse_board([f"wK {token}"])
 
     def test_piece_id_format(self):
         board = parse_board(["wK ."])
         piece = board.get_piece(Position(0, 0))
-        self.assertEqual(piece.id, "wK_0_0")
+        assert piece.id == "wK_0_0"
