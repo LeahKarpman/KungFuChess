@@ -22,11 +22,12 @@ def calculate_route(
     source: Position,
     destination: Position,
 ) -> tuple[Position, ...]:
-    """Return the ordered visual waypoints for one legal move.
+    """Return the ordered timing waypoints for one legal move.
 
     This function describes timing geometry only. The rules layer remains
     responsible for deciding whether the requested move is legal, and Motion
-    separately decides which waypoint boundaries require board resolution.
+    separately decides which waypoint boundaries require board resolution or
+    should be exposed as rendering segments.
     """
     dr = destination.row - source.row
     dc = destination.col - source.col
@@ -144,6 +145,24 @@ class Motion:
     def segment_duration_ms(self) -> int:
         """Return the duration of the current render/timing segment."""
         return self.duration_ms if self.action_kind == "jump" else MS_PER_CELL
+
+    def visual_segment(self) -> tuple[Position, Position, int, int]:
+        """Return source, destination, duration, and elapsed time for rendering."""
+        if self.action_kind == "move" and self.piece.kind == "N":
+            return (
+                self.origin,
+                self.requested_destination,
+                self.duration_ms,
+                self.elapsed_ms,
+            )
+
+        assert self.current_waypoint is not None
+        return (
+            self.current_waypoint,
+            self.next_waypoint,
+            self.segment_duration_ms(),
+            self.segment_elapsed_ms,
+        )
 
     def advance(self, ms: int) -> None:
         """Advance toward, but never beyond, the pending cell boundary."""

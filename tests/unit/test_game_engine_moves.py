@@ -284,8 +284,10 @@ class TestMoveCompletion(unittest.TestCase):
 
         self.assertIs(board.get_piece(Position(0, 0)), knight)
         self.assertIs(board.get_piece(Position(1, 0)), first_blocker)
-        self.assertEqual(first_transit.motions[0].source, Position(1, 0))
-        self.assertEqual(first_transit.motions[0].destination, Position(2, 0))
+        self.assertEqual(first_transit.motions[0].source, Position(0, 0))
+        self.assertEqual(first_transit.motions[0].destination, Position(2, 1))
+        self.assertEqual(first_transit.motions[0].elapsed_ms, 1000)
+        self.assertEqual(first_transit.motions[0].duration_ms, 3000)
         self.assertEqual(engine.consume_events(), ())
         self.assertEqual(first_transit.rests, ())
 
@@ -294,8 +296,10 @@ class TestMoveCompletion(unittest.TestCase):
 
         self.assertIs(board.get_piece(Position(0, 0)), knight)
         self.assertIs(board.get_piece(Position(2, 0)), second_blocker)
-        self.assertEqual(second_transit.motions[0].source, Position(2, 0))
+        self.assertEqual(second_transit.motions[0].source, Position(0, 0))
         self.assertEqual(second_transit.motions[0].destination, Position(2, 1))
+        self.assertEqual(second_transit.motions[0].elapsed_ms, 2000)
+        self.assertEqual(second_transit.motions[0].duration_ms, 3000)
         self.assertEqual(second_transit.motions[0].action_elapsed_ms, 2000)
         self.assertEqual(engine.consume_events(), ())
 

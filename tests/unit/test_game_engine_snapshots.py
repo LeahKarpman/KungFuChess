@@ -104,6 +104,37 @@ class TestGameEngineSnapshots(unittest.TestCase):
         self.assertEqual(motion.duration_ms, 1000)
         self.assertEqual(motion.action_elapsed_ms, 1500)
 
+    def test_knight_snapshot_exposes_one_direct_visual_segment(self) -> None:
+        engine, board = _engine(
+            [
+                "wN .",
+                "wP .",
+                "bP .",
+            ]
+        )
+        knight = board.get_piece(Position(0, 0))
+        friendly_blocker = board.get_piece(Position(1, 0))
+        enemy_blocker = board.get_piece(Position(2, 0))
+        engine.request_move(Position(0, 0), Position(2, 1))
+
+        engine.wait(1500)
+        snapshot = engine.snapshot()
+        motion = snapshot.motions[0]
+
+        self.assertIs(board.get_piece(Position(0, 0)), knight)
+        self.assertIs(board.get_piece(Position(1, 0)), friendly_blocker)
+        self.assertIs(board.get_piece(Position(2, 0)), enemy_blocker)
+        self.assertEqual(motion.source, Position(0, 0))
+        self.assertEqual(motion.destination, Position(2, 1))
+        self.assertEqual(motion.elapsed_ms, 1500)
+        self.assertEqual(motion.duration_ms, 3000)
+
+        engine.wait(1500)
+
+        self.assertIs(board.get_piece(Position(2, 1)), knight)
+        self.assertIs(board.get_piece(Position(1, 0)), friendly_blocker)
+        self.assertIs(board.get_piece(Position(2, 0)), enemy_blocker)
+
     def test_snapshot_and_nested_piece_views_are_immutable(self) -> None:
         engine, _ = _engine(["wR . ."])
         snapshot = engine.snapshot()

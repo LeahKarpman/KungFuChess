@@ -286,15 +286,15 @@ class RealTimeArbiter:
     @staticmethod
     def _to_active_action(motion: Motion) -> ActiveAction:
         """Convert an internal Motion into its immutable external view."""
-        assert motion.current_waypoint is not None
+        source, destination, duration_ms, elapsed_ms = motion.visual_segment()
         return ActiveAction(
             piece_id=motion.piece.id,
             piece_color=motion.piece.color,
             piece_kind=motion.piece.kind,
             action_kind=motion.action_kind,
-            source=motion.current_waypoint,
-            destination=motion.next_waypoint,
-            duration_ms=motion.segment_duration_ms(),
-            elapsed_ms=motion.segment_elapsed_ms,
+            source=source,
+            destination=destination,
+            duration_ms=duration_ms,
+            elapsed_ms=elapsed_ms,
             action_elapsed_ms=motion.elapsed_ms,
         )

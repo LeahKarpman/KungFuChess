@@ -130,10 +130,10 @@ class TestGameOverHardening(unittest.TestCase):
 
         motions = {m.piece_id: m for m in engine.snapshot().motions}
         self.assertIn(knight.id, motions)
-        self.assertEqual(motions[knight.id].source, Position(0, 4))
-        self.assertEqual(motions[knight.id].destination, Position(0, 3))
-        self.assertEqual(motions[knight.id].elapsed_ms, 0)
-        self.assertEqual(motions[knight.id].duration_ms, 1000)
+        self.assertEqual(motions[knight.id].source, Position(0, 5))
+        self.assertEqual(motions[knight.id].destination, Position(1, 3))
+        self.assertEqual(motions[knight.id].elapsed_ms, 1000)
+        self.assertEqual(motions[knight.id].duration_ms, 3000)
         self.assertEqual(motions[knight.id].action_elapsed_ms, 1000)
 
     def test_large_wait_stops_at_boundary_unused_rest_time_is_discarded(self) -> None:
