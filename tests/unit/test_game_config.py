@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
-import tempfile
-import unittest
 from pathlib import Path
 
 import kungfu_chess
+import pytest
 from kungfu_chess.game_config import GameConfig, load_game_config
 from kungfu_chess.realtime.rest import (
     DEFAULT_LONG_COOLDOWN_MS,
@@ -17,79 +16,91 @@ PRODUCTION_CONFIG_PATH = (
 )
 
 
-class TestGameConfigDefaults(unittest.TestCase):
+@pytest.fixture
+def config_path(tmp_path: Path) -> Path:
+    return tmp_path / "game_config.json"
+
+
+def _write(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+
+
+class TestGameConfigDefaults:
     def test_default_values_are_2000_and_10000_ms(self) -> None:
         config = GameConfig()
-        self.assertEqual(config.short_cooldown_ms, DEFAULT_SHORT_COOLDOWN_MS)
-        self.assertEqual(config.long_cooldown_ms, DEFAULT_LONG_COOLDOWN_MS)
-        self.assertEqual(DEFAULT_SHORT_COOLDOWN_MS, 2000)
-        self.assertEqual(DEFAULT_LONG_COOLDOWN_MS, 10000)
+        assert config.short_cooldown_ms == DEFAULT_SHORT_COOLDOWN_MS
+        assert config.long_cooldown_ms == DEFAULT_LONG_COOLDOWN_MS
+        assert DEFAULT_SHORT_COOLDOWN_MS == 2000
+        assert DEFAULT_LONG_COOLDOWN_MS == 10000
 
 
-class TestProductionGameConfigFile(unittest.TestCase):
+class TestProductionGameConfigFile:
     def test_production_config_file_has_default_values(self) -> None:
         config = load_game_config(PRODUCTION_CONFIG_PATH)
-        self.assertEqual(config.short_cooldown_ms, 2000)
-        self.assertEqual(config.long_cooldown_ms, 10000)
+        assert config.short_cooldown_ms == 2000
+        assert config.long_cooldown_ms == 10000
 
 
-class TestLoadGameConfig(unittest.TestCase):
-    def setUp(self) -> None:
-        self._tmp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self._tmp_dir.cleanup)
-        self.path = Path(self._tmp_dir.name) / "game_config.json"
+class TestLoadGameConfig:
+    def test_valid_json_loads_correctly(self, config_path: Path) -> None:
+        _write(
+            config_path,
+            json.dumps({"short_cooldown_ms": 1500, "long_cooldown_ms": 9000}),
+        )
 
-    def _write(self, content: str) -> None:
-        self.path.write_text(content, encoding="utf-8")
+        config = load_game_config(config_path)
 
-    def test_valid_json_loads_correctly(self) -> None:
-        self._write(json.dumps({"short_cooldown_ms": 1500, "long_cooldown_ms": 9000}))
+        assert config.short_cooldown_ms == 1500
+        assert config.long_cooldown_ms == 9000
 
-        config = load_game_config(self.path)
+    def test_missing_field_raises_clear_error(self, config_path: Path) -> None:
+        _write(config_path, json.dumps({"short_cooldown_ms": 1500}))
 
-        self.assertEqual(config.short_cooldown_ms, 1500)
-        self.assertEqual(config.long_cooldown_ms, 9000)
+        with pytest.raises(ValueError, match="long_cooldown_ms"):
+            load_game_config(config_path)
 
-    def test_missing_field_raises_clear_error(self) -> None:
-        self._write(json.dumps({"short_cooldown_ms": 1500}))
+    def test_malformed_json_raises_clear_error(self, config_path: Path) -> None:
+        _write(config_path, "{not valid json")
 
-        with self.assertRaisesRegex(ValueError, "long_cooldown_ms"):
-            load_game_config(self.path)
+        with pytest.raises(ValueError, match="[Mm]alformed"):
+            load_game_config(config_path)
 
-    def test_malformed_json_raises_clear_error(self) -> None:
-        self._write("{not valid json")
+    def test_zero_value_is_rejected(self, config_path: Path) -> None:
+        _write(
+            config_path,
+            json.dumps({"short_cooldown_ms": 0, "long_cooldown_ms": 10000}),
+        )
 
-        with self.assertRaisesRegex(ValueError, "[Mm]alformed"):
-            load_game_config(self.path)
+        with pytest.raises(ValueError, match="short_cooldown_ms"):
+            load_game_config(config_path)
 
-    def test_zero_value_is_rejected(self) -> None:
-        self._write(json.dumps({"short_cooldown_ms": 0, "long_cooldown_ms": 10000}))
+    def test_negative_value_is_rejected(self, config_path: Path) -> None:
+        _write(
+            config_path,
+            json.dumps({"short_cooldown_ms": 2000, "long_cooldown_ms": -10000}),
+        )
 
-        with self.assertRaisesRegex(ValueError, "short_cooldown_ms"):
-            load_game_config(self.path)
+        with pytest.raises(ValueError, match="long_cooldown_ms"):
+            load_game_config(config_path)
 
-    def test_negative_value_is_rejected(self) -> None:
-        self._write(json.dumps({"short_cooldown_ms": 2000, "long_cooldown_ms": -10000}))
+    def test_non_integer_value_is_rejected(self, config_path: Path) -> None:
+        _write(
+            config_path,
+            json.dumps({"short_cooldown_ms": 2000.5, "long_cooldown_ms": 10000}),
+        )
 
-        with self.assertRaisesRegex(ValueError, "long_cooldown_ms"):
-            load_game_config(self.path)
+        with pytest.raises(TypeError, match="short_cooldown_ms"):
+            load_game_config(config_path)
 
-    def test_non_integer_value_is_rejected(self) -> None:
-        self._write(json.dumps({"short_cooldown_ms": 2000.5, "long_cooldown_ms": 10000}))
+    def test_boolean_value_is_rejected(self, config_path: Path) -> None:
+        _write(
+            config_path,
+            json.dumps({"short_cooldown_ms": True, "long_cooldown_ms": 10000}),
+        )
 
-        with self.assertRaisesRegex(TypeError, "short_cooldown_ms"):
-            load_game_config(self.path)
+        with pytest.raises(TypeError, match="short_cooldown_ms"):
+            load_game_config(config_path)
 
-    def test_boolean_value_is_rejected(self) -> None:
-        self._write(json.dumps({"short_cooldown_ms": True, "long_cooldown_ms": 10000}))
-
-        with self.assertRaisesRegex(TypeError, "short_cooldown_ms"):
-            load_game_config(self.path)
-
-    def test_missing_file_raises_clear_error(self) -> None:
-        with self.assertRaises(FileNotFoundError):
-            load_game_config(self.path)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_missing_file_raises_clear_error(self, config_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_game_config(config_path)
