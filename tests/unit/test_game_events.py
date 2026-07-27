@@ -89,6 +89,7 @@ class TestEventCreation(unittest.TestCase):
                 captured_piece_kind="R",
                 captured_piece_color="b",
                 by_piece_id="wR_0_0",
+                by_piece_color="w",
                 position=Position(0, 2),
             ),
             events,
@@ -363,6 +364,7 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
                 captured_piece_kind="R",
                 captured_piece_color="w",
                 by_piece_id="bR_1_0",
+                by_piece_color="b",
                 position=Position(0, 0),
             ),
             events,
@@ -486,6 +488,7 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
                 captured_piece_kind="K",
                 captured_piece_color="b",
                 by_piece_id="wR_1_0",
+                by_piece_color="w",
                 position=Position(0, 0),
             ),
             events,
@@ -519,6 +522,7 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
                     captured_piece_kind="K",
                     captured_piece_color="b",
                     by_piece_id="wR_0_0",
+                    by_piece_color="w",
                     position=Position(0, 2),
                 ),
                 MoveCompleted(
@@ -554,6 +558,7 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
                 captured_piece_kind="K",
                 captured_piece_color="b",
                 by_piece_id="wP_1_0",
+                by_piece_color="w",
                 position=Position(1, 0),
             )
         )
@@ -593,6 +598,7 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
                     captured_piece_kind="K",
                     captured_piece_color="b",
                     by_piece_id="wP_1_1",
+                    by_piece_color="w",
                     position=Position(0, 0),
                 ),
                 MoveCompleted(
@@ -625,6 +631,7 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
                 captured_piece_kind="Q",
                 captured_piece_color="w",
                 by_piece_id="bR_2_0",
+                by_piece_color="b",
                 position=Position(0, 0),
             ),
             events,
@@ -690,6 +697,7 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
                     captured_piece_kind="K",
                     captured_piece_color="b",
                     by_piece_id="wR_1_1",
+                    by_piece_color="w",
                     position=Position(1, 0),
                 ),
                 MoveCompleted(

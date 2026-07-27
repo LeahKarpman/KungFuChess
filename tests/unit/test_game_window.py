@@ -9,6 +9,7 @@ from kungfu_chess.model.game_state import GameSnapshot
 from kungfu_chess.model.position import Position
 from kungfu_chess.ui.game_window import _build_renderer, run_game, run_loop
 from kungfu_chess.ui.layout import BoardLayout
+from kungfu_chess.ui.presentation import GamePresentationSnapshot
 from kungfu_chess.ui.renderer import BoardRenderer
 
 
@@ -45,11 +46,11 @@ class FakeEngine:
 class FakeRenderer:
     def __init__(self) -> None:
         self.frame = FakeFrame()
-        self.render_calls: list[tuple[object, Position | None]] = []
+        self.render_calls: list[tuple[object, Position | None, object]] = []
         self.render_error: Exception | None = None
 
-    def render(self, snapshot, selected):
-        self.render_calls.append((snapshot, selected))
+    def render(self, snapshot, selected, presentation):
+        self.render_calls.append((snapshot, selected, presentation))
         if self.render_error is not None:
             raise self.render_error
         return self.frame
@@ -66,6 +67,18 @@ class FakeController:
 
     def jump(self, x: int, y: int) -> None:
         self.jump_calls.append((x, y))
+
+
+class FakePresentation:
+    def __init__(self) -> None:
+        self.apply_calls: list[tuple[object, ...]] = []
+        self.snapshot_value = object()
+
+    def apply(self, events) -> None:
+        self.apply_calls.append(tuple(events))
+
+    def snapshot(self):
+        return self.snapshot_value
 
 
 class SequencePollKey:
@@ -114,7 +127,12 @@ class TestRunLoop(unittest.TestCase):
 
     def setUp(self) -> None:
         self.window = FakeWindow()
-        self.run_loop = partial(run_loop, window=self.window)
+        self.presentation = FakePresentation()
+        self.run_loop = partial(
+            run_loop,
+            presentation=self.presentation,
+            window=self.window,
+        )
 
     def test_advances_engine_with_elapsed_milliseconds(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -208,7 +226,7 @@ class TestRunLoop(unittest.TestCase):
 
         self.assertEqual(engine.consume_events_calls, 3)
 
-    def test_consumes_events_after_mouse_input_is_polled(self) -> None:
+    def test_consumes_events_before_mouse_input_is_polled(self) -> None:
         engine, renderer = _make_engine_and_renderer()
         controller = _make_controller()
         clock_values = iter([0.0, 0.1])
@@ -219,7 +237,7 @@ class TestRunLoop(unittest.TestCase):
             return 27
 
         def consume_events() -> tuple[object, ...]:
-            self.assertEqual(controller.click_calls, [(123, 456)])
+            self.assertEqual(controller.click_calls, [])
             return ()
 
         engine.consume_events_hook = consume_events
@@ -233,6 +251,7 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(engine.consume_events_calls, 1)
+        self.assertEqual(controller.click_calls, [(123, 456)])
 
     def test_exits_on_escape_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -329,7 +348,10 @@ class TestRunLoop(unittest.TestCase):
         )
 
         self.assertEqual(len(renderer.render_calls), 2)
-        self.assertEqual(renderer.render_calls[-1], (game_over_snapshot, None))
+        self.assertEqual(
+            renderer.render_calls[-1],
+            (game_over_snapshot, None, self.presentation.snapshot_value),
+        )
         self.assertEqual(self.window.is_open_calls, ["Kung-Fu Chess"])
         self.assertEqual(self.window.close_calls, 1)
 
@@ -533,7 +555,10 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.render_calls, [(engine.snapshot_value, selected)])
+        self.assertEqual(
+            renderer.render_calls,
+            [(engine.snapshot_value, selected, self.presentation.snapshot_value)],
+        )
 
     def test_next_frame_reflects_selection_change_from_a_click(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -583,13 +608,16 @@ class TestMainComposition(unittest.TestCase):
 
         loop_calls = []
 
-        def loop(loop_engine, loop_renderer, controller):
-            loop_calls.append((loop_engine, loop_renderer, controller))
+        def loop(loop_engine, loop_renderer, controller, loop_presentation):
+            loop_calls.append(
+                (loop_engine, loop_renderer, controller, loop_presentation)
+            )
 
         run_game(
             engine,
             renderer,
             layout,
+            FakePresentation(),
             controller_factory=controller_factory,
             loop=loop,
         )
@@ -599,8 +627,9 @@ class TestMainComposition(unittest.TestCase):
         sample_y = layout.origin_y + 3
         self.assertEqual(mapper.pixel_to_cell(sample_x, sample_y), Position(0, 0))
 
-        baseline = renderer.render(snapshot)
-        selected = renderer.render(snapshot, selected=Position(0, 0))
+        presentation = GamePresentationSnapshot(0, 0, (), ())
+        baseline = renderer.render(snapshot, None, presentation)
+        selected = renderer.render(snapshot, Position(0, 0), presentation)
         self.assertFalse(
             (baseline.pixels[sample_y, sample_x] == selected.pixels[sample_y, sample_x]).all()
         )

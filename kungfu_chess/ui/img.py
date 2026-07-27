@@ -20,6 +20,22 @@ class Img:
             raise ValueError("Image not loaded.")
         return self.img
 
+    def create(
+        self,
+        width: int,
+        height: int,
+        color: tuple[int, ...] = (0, 0, 0, 255),
+    ) -> Img:
+        """Create a solid-color image owned by this Img instance."""
+        if width <= 0 or height <= 0:
+            raise ValueError(
+                f"Image dimensions must be positive, got {width}x{height}."
+            )
+        if len(color) not in (3, 4):
+            raise ValueError("Image color must have three or four channels.")
+        self.img = np.full((height, width, len(color)), color, dtype=np.uint8)
+        return self
+
     def read(
         self,
         path: str | pathlib.Path,

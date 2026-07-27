@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from ..engine.game_engine import GameEngine
-from ..game_config import load_game_config
+from ..game_config import GameConfig, load_game_config
 from ..input.board_mapper import DEFAULT_CELL_SIZE, BoardMapper
 from ..input.controller import Controller
 from ..io.board_parser import parse_board
@@ -14,7 +14,8 @@ from ..realtime.real_time_arbiter import RealTimeArbiter
 from ..rules.rule_engine import RuleEngine
 from .img import Img
 from .layout import BoardLayout
-from .renderer import BoardRenderer
+from .presentation import GamePresentation
+from .renderer import BoardRenderer, GameRenderer
 from .sprite_loader import SpriteLoader
 
 WINDOW_TITLE = "Kung-Fu Chess"
@@ -41,12 +42,11 @@ class WindowOperations(Protocol):
     def close_all_windows(self) -> None: ...
 
 
-def _build_standard_engine() -> GameEngine:
+def _build_standard_engine(config: GameConfig) -> GameEngine:
     """Construct a GameEngine for the standard starting position via the existing parser."""
     text = _STANDARD_BOARD_PATH.read_text(encoding="utf-8")
     lines = text.strip("\n").splitlines()
     board = parse_board(lines)
-    config = load_game_config(_GAME_CONFIG_PATH)
     arbiter = RealTimeArbiter(
         short_cooldown_ms=config.short_cooldown_ms,
         long_cooldown_ms=config.long_cooldown_ms,
@@ -54,15 +54,17 @@ def _build_standard_engine() -> GameEngine:
     return GameEngine(board, RuleEngine(), arbiter)
 
 
-def _build_renderer(layout: BoardLayout) -> BoardRenderer:
+def _build_renderer(layout: BoardLayout) -> GameRenderer:
     sprite_loader = SpriteLoader(_ASSETS_ROOT / "pieces2")
-    return BoardRenderer(_ASSETS_ROOT / "board.png", sprite_loader, layout)
+    board_renderer = BoardRenderer(_ASSETS_ROOT / "board.png", sprite_loader, layout)
+    return GameRenderer(board_renderer)
 
 
 def run_loop(
     engine: GameEngine,
-    renderer: BoardRenderer,
+    renderer: GameRenderer,
     controller: Controller,
+    presentation: GamePresentation,
     clock: Callable[[], float] = time.perf_counter,
     poll_key: Callable[[int], int] = Img.poll_key,
     window: WindowOperations = Img(),
@@ -86,12 +88,17 @@ def run_loop(
             last_time = now
 
             engine.wait(elapsed_ms)
+            events = engine.consume_events()
+            presentation.apply(events)
             snapshot = engine.snapshot()
-            frame = renderer.render(snapshot, controller.selected)
+            frame = renderer.render(
+                snapshot,
+                controller.selected,
+                presentation.snapshot(),
+            )
             frame.show_frame(WINDOW_TITLE)
 
             key = poll_key(POLL_DELAY_MS)
-            _ = engine.consume_events()
             if key in _EXIT_KEYS or not window.is_window_open(WINDOW_TITLE):
                 break
     finally:
@@ -100,10 +107,13 @@ def run_loop(
 
 def run_game(
     engine: GameEngine,
-    renderer: BoardRenderer,
+    renderer: GameRenderer,
     layout: BoardLayout,
+    presentation: GamePresentation,
     controller_factory: Callable[[BoardMapper, GameEngine], Controller] = Controller,
-    loop: Callable[[GameEngine, BoardRenderer, Controller], None] = run_loop,
+    loop: Callable[
+        [GameEngine, GameRenderer, Controller, GamePresentation], None
+    ] = run_loop,
 ) -> None:
     """Wire input geometry to an existing game and run its persistent window."""
     snapshot = engine.snapshot()
@@ -115,12 +125,17 @@ def run_game(
         origin_y=layout.origin_y,
     )
     controller = controller_factory(mapper, engine)
-    loop(engine, renderer, controller)
+    loop(engine, renderer, controller, presentation)
 
 
 def main() -> None:
     """Run the persistent real-time window until the user closes it."""
-    engine = _build_standard_engine()
+    config = load_game_config(_GAME_CONFIG_PATH)
+    engine = _build_standard_engine(config)
     layout = BoardLayout(cell_size=DEFAULT_CELL_SIZE)
     renderer = _build_renderer(layout)
-    run_game(engine, renderer, layout)
+    presentation = GamePresentation(
+        piece_values=config.piece_values,
+        board_height=engine.snapshot().height,
+    )
+    run_game(engine, renderer, layout, presentation)

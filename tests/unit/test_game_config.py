@@ -14,6 +14,7 @@ from kungfu_chess.realtime.rest import (
 PRODUCTION_CONFIG_PATH = (
     Path(kungfu_chess.__file__).resolve().parent / "resources" / "game_config.json"
 )
+PIECE_VALUES = {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0}
 
 
 @pytest.fixture
@@ -27,9 +28,10 @@ def _write(path: Path, content: str) -> None:
 
 class TestGameConfigDefaults:
     def test_default_values_are_2000_and_10000_ms(self) -> None:
-        config = GameConfig()
+        config = GameConfig(piece_values=PIECE_VALUES)
         assert config.short_cooldown_ms == DEFAULT_SHORT_COOLDOWN_MS
         assert config.long_cooldown_ms == DEFAULT_LONG_COOLDOWN_MS
+        assert dict(config.piece_values) == PIECE_VALUES
         assert DEFAULT_SHORT_COOLDOWN_MS == 2000
         assert DEFAULT_LONG_COOLDOWN_MS == 10000
 
@@ -39,13 +41,20 @@ class TestProductionGameConfigFile:
         config = load_game_config(PRODUCTION_CONFIG_PATH)
         assert config.short_cooldown_ms == 2000
         assert config.long_cooldown_ms == 10000
+        assert dict(config.piece_values) == PIECE_VALUES
 
 
 class TestLoadGameConfig:
     def test_valid_json_loads_correctly(self, config_path: Path) -> None:
         _write(
             config_path,
-            json.dumps({"short_cooldown_ms": 1500, "long_cooldown_ms": 9000}),
+            json.dumps(
+                {
+                    "short_cooldown_ms": 1500,
+                    "long_cooldown_ms": 9000,
+                    "piece_values": PIECE_VALUES,
+                }
+            ),
         )
 
         config = load_game_config(config_path)
@@ -54,7 +63,10 @@ class TestLoadGameConfig:
         assert config.long_cooldown_ms == 9000
 
     def test_missing_field_raises_clear_error(self, config_path: Path) -> None:
-        _write(config_path, json.dumps({"short_cooldown_ms": 1500}))
+        _write(
+            config_path,
+            json.dumps({"short_cooldown_ms": 1500, "piece_values": PIECE_VALUES}),
+        )
 
         with pytest.raises(ValueError, match="long_cooldown_ms"):
             load_game_config(config_path)
@@ -68,7 +80,13 @@ class TestLoadGameConfig:
     def test_zero_value_is_rejected(self, config_path: Path) -> None:
         _write(
             config_path,
-            json.dumps({"short_cooldown_ms": 0, "long_cooldown_ms": 10000}),
+            json.dumps(
+                {
+                    "short_cooldown_ms": 0,
+                    "long_cooldown_ms": 10000,
+                    "piece_values": PIECE_VALUES,
+                }
+            ),
         )
 
         with pytest.raises(ValueError, match="short_cooldown_ms"):
@@ -77,7 +95,13 @@ class TestLoadGameConfig:
     def test_negative_value_is_rejected(self, config_path: Path) -> None:
         _write(
             config_path,
-            json.dumps({"short_cooldown_ms": 2000, "long_cooldown_ms": -10000}),
+            json.dumps(
+                {
+                    "short_cooldown_ms": 2000,
+                    "long_cooldown_ms": -10000,
+                    "piece_values": PIECE_VALUES,
+                }
+            ),
         )
 
         with pytest.raises(ValueError, match="long_cooldown_ms"):
@@ -86,7 +110,13 @@ class TestLoadGameConfig:
     def test_non_integer_value_is_rejected(self, config_path: Path) -> None:
         _write(
             config_path,
-            json.dumps({"short_cooldown_ms": 2000.5, "long_cooldown_ms": 10000}),
+            json.dumps(
+                {
+                    "short_cooldown_ms": 2000.5,
+                    "long_cooldown_ms": 10000,
+                    "piece_values": PIECE_VALUES,
+                }
+            ),
         )
 
         with pytest.raises(TypeError, match="short_cooldown_ms"):
@@ -95,7 +125,13 @@ class TestLoadGameConfig:
     def test_boolean_value_is_rejected(self, config_path: Path) -> None:
         _write(
             config_path,
-            json.dumps({"short_cooldown_ms": True, "long_cooldown_ms": 10000}),
+            json.dumps(
+                {
+                    "short_cooldown_ms": True,
+                    "long_cooldown_ms": 10000,
+                    "piece_values": PIECE_VALUES,
+                }
+            ),
         )
 
         with pytest.raises(TypeError, match="short_cooldown_ms"):
