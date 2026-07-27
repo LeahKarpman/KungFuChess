@@ -145,9 +145,7 @@ class BoardRenderer:
 
     def _draw_stationary_piece(self, canvas: Img, piece: PieceSnapshot) -> None:
         sprite = self._sprite_loader.load_idle_sprite(piece.kind, piece.color)
-        sprite_height, sprite_width = sprite.img.shape[:2]
-        x, y = self._layout.centered_top_left(piece.cell, sprite_width, sprite_height)
-        sprite.draw_on(canvas, x, y)
+        self._draw_sprite_centered_in_cell(canvas, sprite, piece.cell)
 
     def _draw_resting_piece(
         self, canvas: Img, piece: PieceSnapshot, rest: RestSnapshot
@@ -155,8 +153,13 @@ class BoardRenderer:
         sprite = self._sprite_loader.get_animation_frame(
             piece.kind, piece.color, rest.rest_kind, rest.elapsed_ms
         )
+        self._draw_sprite_centered_in_cell(canvas, sprite, piece.cell)
+
+    def _draw_sprite_centered_in_cell(
+        self, canvas: Img, sprite: Img, cell: Position
+    ) -> None:
         sprite_height, sprite_width = sprite.img.shape[:2]
-        x, y = self._layout.centered_top_left(piece.cell, sprite_width, sprite_height)
+        x, y = self._layout.centered_top_left(cell, sprite_width, sprite_height)
         sprite.draw_on(canvas, x, y)
 
     def _draw_moving_piece(
