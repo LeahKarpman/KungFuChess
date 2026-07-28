@@ -1,7 +1,5 @@
 # pyright: reportOptionalMemberAccess=false
 
-import unittest
-
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.io.board_parser import parse_board
 from kungfu_chess.model.board import Board
@@ -57,7 +55,7 @@ class _FalseyArbiter(RealTimeArbiter):
         return True
 
 
-class TestMoveRequests(unittest.TestCase):
+class TestMoveRequests:
     """Verify move requests, rejection, and scheduling delegation."""
 
     def test_legal_move_returns_ok(self) -> None:
@@ -68,8 +66,8 @@ class TestMoveRequests(unittest.TestCase):
             Position(1, 2),
         )
 
-        self.assertTrue(result.ok)
-        self.assertEqual(result.reason, "ok")
+        assert result.ok
+        assert result.reason == "ok"
 
     def test_uses_falsey_injected_rule_engine(self) -> None:
         board = parse_board(["wR ."])
@@ -81,8 +79,8 @@ class TestMoveRequests(unittest.TestCase):
 
         result = engine.request_move(Position(0, 0), Position(0, 1))
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "injected_rule_engine")
+        assert not result.ok
+        assert result.reason == "injected_rule_engine"
 
     def test_uses_falsey_injected_arbiter(self) -> None:
         board = parse_board(["wR ."])
@@ -94,8 +92,8 @@ class TestMoveRequests(unittest.TestCase):
 
         result = engine.request_move(Position(0, 0), Position(0, 1))
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "piece_busy")
+        assert not result.ok
+        assert result.reason == "piece_busy"
 
     def test_empty_source_reason_propagates_without_starting_motion(self) -> None:
         engine, _ = _engine([". ."])
@@ -103,10 +101,10 @@ class TestMoveRequests(unittest.TestCase):
 
         result = engine.request_move(Position(0, 0), Position(0, 1))
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "empty_source")
-        self.assertEqual(engine.snapshot(), before)
-        self.assertEqual(engine.consume_events(), ())
+        assert not result.ok
+        assert result.reason == "empty_source"
+        assert engine.snapshot() == before
+        assert engine.consume_events() == ()
 
     def test_friendly_destination_reason_propagates_without_starting_motion(
         self,
@@ -116,10 +114,10 @@ class TestMoveRequests(unittest.TestCase):
 
         result = engine.request_move(Position(0, 0), Position(0, 1))
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "friendly_destination")
-        self.assertEqual(engine.snapshot(), before)
-        self.assertEqual(engine.consume_events(), ())
+        assert not result.ok
+        assert result.reason == "friendly_destination"
+        assert engine.snapshot() == before
+        assert engine.consume_events() == ()
 
     def test_illegal_piece_move_reason_propagates_without_starting_motion(
         self,
@@ -132,10 +130,10 @@ class TestMoveRequests(unittest.TestCase):
             Position(0, 2),
         )
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "illegal_piece_move")
-        self.assertEqual(engine.snapshot(), before)
-        self.assertEqual(engine.consume_events(), ())
+        assert not result.ok
+        assert result.reason == "illegal_piece_move"
+        assert engine.snapshot() == before
+        assert engine.consume_events() == ()
 
     def test_outside_board_reason_propagates_without_starting_motion(self) -> None:
         engine, _ = _engine(["wR ."])
@@ -143,10 +141,10 @@ class TestMoveRequests(unittest.TestCase):
 
         result = engine.request_move(Position(0, 0), Position(-1, 0))
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "outside_board")
-        self.assertEqual(engine.snapshot(), before)
-        self.assertEqual(engine.consume_events(), ())
+        assert not result.ok
+        assert result.reason == "outside_board"
+        assert engine.snapshot() == before
+        assert engine.consume_events() == ()
 
     def test_game_over_checked_before_rule_engine(self) -> None:
         board = parse_board([". wR ."])
@@ -162,7 +160,7 @@ class TestMoveRequests(unittest.TestCase):
             Position(0, 2),
         )
 
-        self.assertEqual(result.reason, "game_over")
+        assert result.reason == "game_over"
 
     def test_busy_piece_rejects_second_move(self) -> None:
         engine, _ = _engine([". wR . . ."])
@@ -176,8 +174,8 @@ class TestMoveRequests(unittest.TestCase):
             Position(0, 0),
         )
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.reason, "piece_busy")
+        assert not result.ok
+        assert result.reason == "piece_busy"
 
     def test_wait_delegates_to_arbiter(self) -> None:
         arbiter = _RecordingArbiter()
@@ -190,10 +188,10 @@ class TestMoveRequests(unittest.TestCase):
 
         engine.wait(500)
 
-        self.assertEqual(arbiter.advance_time_calls, [500])
+        assert arbiter.advance_time_calls == [500]
 
 
-class TestMoveCompletion(unittest.TestCase):
+class TestMoveCompletion:
     """Verify completed moves update board and capture state."""
 
     def test_arrival_moves_piece_on_board(self) -> None:
@@ -208,12 +206,12 @@ class TestMoveCompletion(unittest.TestCase):
 
         engine.wait(2000)
 
-        self.assertIsNotNone(piece)
-        self.assertIsNone(board.get_piece(source))
-        self.assertIs(board.get_piece(destination), piece)
-        self.assertEqual(piece.cell, destination)
+        assert piece is not None
+        assert board.get_piece(source) is None
+        assert board.get_piece(destination) is piece
+        assert piece.cell == destination
         snapshot_piece = next(p for p in engine.snapshot().pieces if p.id == piece.id)
-        self.assertEqual(snapshot_piece.cell, destination)
+        assert snapshot_piece.cell == destination
 
     def test_captured_piece_keeps_captured_state(self) -> None:
         engine, board = _engine(["wR . bK"])
@@ -228,17 +226,17 @@ class TestMoveCompletion(unittest.TestCase):
         )
         engine.wait(2000)
 
-        self.assertIsNotNone(moving_piece)
-        self.assertIsNotNone(captured_piece)
-        self.assertIsNone(board.get_piece(source))
-        self.assertIs(board.get_piece(destination), moving_piece)
-        self.assertEqual(moving_piece.cell, destination)
-        self.assertEqual(captured_piece.state, "captured")
-        self.assertEqual(captured_piece.cell, destination)
+        assert moving_piece is not None
+        assert captured_piece is not None
+        assert board.get_piece(source) is None
+        assert board.get_piece(destination) is moving_piece
+        assert moving_piece.cell == destination
+        assert captured_piece.state == "captured"
+        assert captured_piece.cell == destination
         snapshot_piece = next(
             piece for piece in engine.snapshot().pieces if piece.id == moving_piece.id
         )
-        self.assertEqual(snapshot_piece.cell, destination)
+        assert snapshot_piece.cell == destination
 
     def test_intermediate_step_emits_no_completion_and_starts_no_rest(self) -> None:
         engine, board = _engine(["wR . . ."])
@@ -248,10 +246,10 @@ class TestMoveCompletion(unittest.TestCase):
 
         engine.wait(1000)
 
-        self.assertIs(board.get_piece(Position(0, 1)), piece)
-        self.assertEqual(piece.state, "moving")
-        self.assertEqual(engine.consume_events(), ())
-        self.assertEqual(engine.snapshot().rests, ())
+        assert board.get_piece(Position(0, 1)) is piece
+        assert piece.state == "moving"
+        assert engine.consume_events() == ()
+        assert engine.snapshot().rests == ()
 
     def test_large_wait_crosses_all_cell_boundaries_in_order(self) -> None:
         engine, board = _engine(["wR . . . ."])
@@ -261,22 +259,19 @@ class TestMoveCompletion(unittest.TestCase):
 
         engine.wait(4000)
 
-        self.assertIs(board.get_piece(Position(0, 4)), piece)
-        self.assertEqual(
-            engine.consume_events(),
-            (
-                MoveCompleted(
-                    piece_id=piece.id,
-                    piece_kind="R",
-                    piece_color="w",
-                    source=Position(0, 0),
-                    destination=Position(0, 4),
-                ),
-                RestStarted(
-                    piece_id=piece.id,
-                    rest_kind="long_rest",
-                    duration_ms=10000,
-                ),
+        assert board.get_piece(Position(0, 4)) is piece
+        assert engine.consume_events() == (
+            MoveCompleted(
+                piece_id=piece.id,
+                piece_kind="R",
+                piece_color="w",
+                source=Position(0, 0),
+                destination=Position(0, 4),
+            ),
+            RestStarted(
+                piece_id=piece.id,
+                rest_kind="long_rest",
+                duration_ms=10000,
             ),
         )
 
@@ -297,36 +292,36 @@ class TestMoveCompletion(unittest.TestCase):
         engine.wait(1000)
         first_transit = engine.snapshot()
 
-        self.assertIs(board.get_piece(Position(0, 0)), knight)
-        self.assertIs(board.get_piece(Position(1, 0)), first_blocker)
-        self.assertEqual(first_transit.motions[0].source, Position(0, 0))
-        self.assertEqual(first_transit.motions[0].destination, Position(2, 1))
-        self.assertEqual(first_transit.motions[0].elapsed_ms, 1000)
-        self.assertEqual(first_transit.motions[0].duration_ms, 3000)
-        self.assertEqual(engine.consume_events(), ())
-        self.assertEqual(first_transit.rests, ())
+        assert board.get_piece(Position(0, 0)) is knight
+        assert board.get_piece(Position(1, 0)) is first_blocker
+        assert first_transit.motions[0].source == Position(0, 0)
+        assert first_transit.motions[0].destination == Position(2, 1)
+        assert first_transit.motions[0].elapsed_ms == 1000
+        assert first_transit.motions[0].duration_ms == 3000
+        assert engine.consume_events() == ()
+        assert first_transit.rests == ()
 
         engine.wait(1000)
         second_transit = engine.snapshot()
 
-        self.assertIs(board.get_piece(Position(0, 0)), knight)
-        self.assertIs(board.get_piece(Position(2, 0)), second_blocker)
-        self.assertEqual(second_transit.motions[0].source, Position(0, 0))
-        self.assertEqual(second_transit.motions[0].destination, Position(2, 1))
-        self.assertEqual(second_transit.motions[0].elapsed_ms, 2000)
-        self.assertEqual(second_transit.motions[0].duration_ms, 3000)
-        self.assertEqual(second_transit.motions[0].action_elapsed_ms, 2000)
-        self.assertEqual(engine.consume_events(), ())
+        assert board.get_piece(Position(0, 0)) is knight
+        assert board.get_piece(Position(2, 0)) is second_blocker
+        assert second_transit.motions[0].source == Position(0, 0)
+        assert second_transit.motions[0].destination == Position(2, 1)
+        assert second_transit.motions[0].elapsed_ms == 2000
+        assert second_transit.motions[0].duration_ms == 3000
+        assert second_transit.motions[0].action_elapsed_ms == 2000
+        assert engine.consume_events() == ()
 
         engine.wait(999)
-        self.assertIs(board.get_piece(Position(0, 0)), knight)
-        self.assertEqual(engine.consume_events(), ())
+        assert board.get_piece(Position(0, 0)) is knight
+        assert engine.consume_events() == ()
 
         engine.wait(1)
 
-        self.assertIsNone(board.get_piece(Position(0, 0)))
-        self.assertIs(board.get_piece(Position(2, 1)), knight)
-        self.assertEqual(knight.state, "long_rest")
+        assert board.get_piece(Position(0, 0)) is None
+        assert board.get_piece(Position(2, 1)) is knight
+        assert knight.state == "long_rest"
 
     def test_knight_does_not_capture_enemies_on_visual_waypoints(self) -> None:
         engine, board = _engine(
@@ -345,9 +340,9 @@ class TestMoveCompletion(unittest.TestCase):
         engine.wait(3000)
         events = engine.consume_events()
 
-        self.assertIs(board.get_piece(Position(1, 0)), first_enemy)
-        self.assertIs(board.get_piece(Position(2, 0)), second_enemy)
-        self.assertIs(board.get_piece(Position(2, 1)), knight)
-        self.assertNotEqual(first_enemy.state, "captured")
-        self.assertNotEqual(second_enemy.state, "captured")
-        self.assertFalse(any(isinstance(event, PieceCaptured) for event in events))
+        assert board.get_piece(Position(1, 0)) is first_enemy
+        assert board.get_piece(Position(2, 0)) is second_enemy
+        assert board.get_piece(Position(2, 1)) is knight
+        assert first_enemy.state != "captured"
+        assert second_enemy.state != "captured"
+        assert not any(isinstance(event, PieceCaptured) for event in events)
