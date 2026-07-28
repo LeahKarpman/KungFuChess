@@ -1,12 +1,10 @@
 # pyright: reportOptionalMemberAccess=false
 
-import unittest
-
 from kungfu_chess.model.position import Position
 from tests.unit.game_engine_test_support import make_engine as _engine
 
 
-class TestGameOver(unittest.TestCase):
+class TestGameOver:
     """Verify king capture makes the engine reject later moves."""
 
     def test_king_capture_sets_game_over(self) -> None:
@@ -18,7 +16,7 @@ class TestGameOver(unittest.TestCase):
 
         engine.wait(2000)
 
-        self.assertTrue(engine.game_over)
+        assert engine.game_over
 
     def test_game_over_blocks_further_moves(self) -> None:
         engine, _ = _engine(["wR . bK"])
@@ -33,17 +31,17 @@ class TestGameOver(unittest.TestCase):
             Position(0, 0),
         )
 
-        self.assertEqual(result.reason, "game_over")
+        assert result.reason == "game_over"
 
 
-class TestCooldownGameOver(unittest.TestCase):
+class TestCooldownGameOver:
     def test_capturing_a_king_ends_the_game(self) -> None:
         engine, _board = _engine(["wR . bK"])
         engine.request_move(Position(0, 0), Position(0, 2))
 
         engine.wait(2000)
 
-        self.assertTrue(engine.game_over)
+        assert engine.game_over
 
     def test_surviving_capturing_piece_receives_no_rest_record_after_game_over(self) -> None:
         engine, board = _engine(["wR . bK"])
@@ -52,8 +50,8 @@ class TestCooldownGameOver(unittest.TestCase):
         engine.wait(2000)
 
         survivor = board.get_piece(Position(0, 2))
-        self.assertEqual(survivor.state, "idle")
-        self.assertEqual(engine.snapshot().rests, ())
+        assert survivor.state == "idle"
+        assert engine.snapshot().rests == ()
 
     def test_jump_capture_of_king_grants_no_rest_to_jumper(self) -> None:
         engine, board = _engine([". . .", "wP bK .", ". . ."])
@@ -63,12 +61,12 @@ class TestCooldownGameOver(unittest.TestCase):
         engine.wait(1000)
 
         winner = board.get_piece(Position(1, 0))
-        self.assertTrue(engine.game_over)
-        self.assertEqual(winner.state, "idle")
-        self.assertEqual(engine.snapshot().rests, ())
+        assert engine.game_over
+        assert winner.state == "idle"
+        assert engine.snapshot().rests == ()
 
 
-class TestGameOverHardening(unittest.TestCase):
+class TestGameOverHardening:
     """Verify that game over is terminal: simulated time stops the instant
     a king is captured, no completed-but-unresolved action orphans its
     piece, and the terminal snapshot never drifts afterward.
@@ -78,12 +76,12 @@ class TestGameOverHardening(unittest.TestCase):
         engine, _ = _engine(["wR . bK"])
         engine.request_move(Position(0, 0), Position(0, 2))
         engine.wait(2000)
-        self.assertTrue(engine.game_over)
+        assert engine.game_over
         before = engine.snapshot()
 
         engine.wait(5000)
 
-        self.assertEqual(engine.snapshot(), before)
+        assert engine.snapshot() == before
 
     def test_wait_after_game_over_emits_no_events(self) -> None:
         engine, _ = _engine(["wR . bK"])
@@ -93,7 +91,7 @@ class TestGameOverHardening(unittest.TestCase):
 
         engine.wait(5000)
 
-        self.assertEqual(engine.consume_events(), ())
+        assert engine.consume_events() == ()
 
     def test_repeated_waits_after_game_over_remain_no_ops(self) -> None:
         engine, _ = _engine(["wR . bK"])
@@ -104,8 +102,8 @@ class TestGameOverHardening(unittest.TestCase):
 
         for _ in range(3):
             engine.wait(1000)
-            self.assertEqual(engine.snapshot(), before)
-            self.assertEqual(engine.consume_events(), ())
+            assert engine.snapshot() == before
+            assert engine.consume_events() == ()
 
     def test_large_wait_stops_at_boundary_unused_motion_time_is_discarded(self) -> None:
         """A single wait() spanning well past the king capture must not let
@@ -120,21 +118,21 @@ class TestGameOverHardening(unittest.TestCase):
 
         engine.wait(10000)
 
-        self.assertTrue(engine.game_over)
-        self.assertIsNone(board.get_piece(Position(1, 3)))
+        assert engine.game_over
+        assert board.get_piece(Position(1, 3)) is None
         # The knight advanced to its first visual waypoint at the same
         # millisecond, but its authoritative occupied cell remains its source.
         knight = board.get_piece(Position(0, 5))
-        self.assertIsNotNone(knight)
-        self.assertEqual(knight.state, "moving")
+        assert knight is not None
+        assert knight.state == "moving"
 
         motions = {m.piece_id: m for m in engine.snapshot().motions}
-        self.assertIn(knight.id, motions)
-        self.assertEqual(motions[knight.id].source, Position(0, 5))
-        self.assertEqual(motions[knight.id].destination, Position(1, 3))
-        self.assertEqual(motions[knight.id].elapsed_ms, 1000)
-        self.assertEqual(motions[knight.id].duration_ms, 3000)
-        self.assertEqual(motions[knight.id].action_elapsed_ms, 1000)
+        assert knight.id in motions
+        assert motions[knight.id].source == Position(0, 5)
+        assert motions[knight.id].destination == Position(1, 3)
+        assert motions[knight.id].elapsed_ms == 1000
+        assert motions[knight.id].duration_ms == 3000
+        assert motions[knight.id].action_elapsed_ms == 1000
 
     def test_large_wait_stops_at_boundary_unused_rest_time_is_discarded(self) -> None:
         """Same guarantee for an already-active rest: its cooldown must not
@@ -150,11 +148,11 @@ class TestGameOverHardening(unittest.TestCase):
 
         engine.wait(20000)
 
-        self.assertTrue(engine.game_over)
+        assert engine.game_over
         rests = {r.piece_id: r for r in engine.snapshot().rests}
-        self.assertIn("wR_1_0", rests)
-        self.assertEqual(rests["wR_1_0"].elapsed_ms, 2000)
-        self.assertEqual(board.get_piece(Position(1, 1)).state, "long_rest")
+        assert "wR_1_0" in rests
+        assert rests["wR_1_0"].elapsed_ms == 2000
+        assert board.get_piece(Position(1, 1)).state == "long_rest"
 
     def test_jumping_piece_remains_represented_when_game_ends_first(self) -> None:
         """A move captures a king and a jump completes at the same boundary
@@ -171,16 +169,16 @@ class TestGameOverHardening(unittest.TestCase):
 
         engine.wait(1000)
 
-        self.assertTrue(engine.game_over)
-        self.assertEqual(board.get_piece(Position(0, 1)).color, "w")
-        self.assertIsNone(board.get_piece(Position(1, 2)))
+        assert engine.game_over
+        assert board.get_piece(Position(0, 1)).color == "w"
+        assert board.get_piece(Position(1, 2)) is None
 
-        self.assertEqual(jumper.state, "moving")
-        self.assertNotEqual(jumper.state, "captured")
+        assert jumper.state == "moving"
+        assert jumper.state != "captured"
 
         snapshot = engine.snapshot()
-        self.assertIn(jumper.id, {p.id for p in snapshot.pieces})
-        self.assertIn(jumper.id, {m.piece_id for m in snapshot.motions})
+        assert jumper.id in {p.id for p in snapshot.pieces}
+        assert jumper.id in {m.piece_id for m in snapshot.motions}
 
     def test_jump_does_not_capture_second_king_after_move_ends_game(self) -> None:
         """A jump whose landing cell would hold a second king (because that
@@ -209,36 +207,36 @@ class TestGameOverHardening(unittest.TestCase):
 
         engine.wait(1000)
 
-        self.assertTrue(engine.game_over)
-        self.assertEqual(board.get_piece(Position(0, 0)).color, "w")
+        assert engine.game_over
+        assert board.get_piece(Position(0, 0)).color == "w"
 
         # Second king: landed successfully (its own move resolved before
         # the game ended) but was never captured by the blocked jump.
-        self.assertIs(board.get_piece(Position(2, 0)), second_king)
-        self.assertNotEqual(second_king.state, "captured")
+        assert board.get_piece(Position(2, 0)) is second_king
+        assert second_king.state != "captured"
 
         # The jumper itself: never landed, never orphaned.
-        self.assertNotIn(jumper.id, {p.id for p in board.all_pieces()})
-        self.assertEqual(jumper.state, "moving")
+        assert jumper.id not in {p.id for p in board.all_pieces()}
+        assert jumper.state == "moving"
 
         # The unrelated bystander's move was also blocked (later in the
         # same completion batch) and must not have vanished either.
-        self.assertIs(board.get_piece(Position(1, 0)), bystander)
-        self.assertEqual(bystander.state, "moving")
-        self.assertIsNone(board.get_piece(Position(1, 1)))
+        assert board.get_piece(Position(1, 0)) is bystander
+        assert bystander.state == "moving"
+        assert board.get_piece(Position(1, 1)) is None
 
         snapshot = engine.snapshot()
         ids = [p.id for p in snapshot.pieces]
-        self.assertEqual(len(ids), len(set(ids)), "no piece should be represented twice")
-        self.assertIn(jumper.id, ids)
-        self.assertIn(bystander.id, ids)
+        assert len(ids) == len(set(ids)), "no piece should be represented twice"
+        assert jumper.id in ids
+        assert bystander.id in ids
 
     def test_repeated_snapshots_after_game_over_are_equal(self) -> None:
         engine, _ = _engine(["wR . bK"])
         engine.request_move(Position(0, 0), Position(0, 2))
         engine.wait(2000)
 
-        self.assertEqual(engine.snapshot(), engine.snapshot())
+        assert engine.snapshot() == engine.snapshot()
 
     def test_no_captured_piece_returns_after_later_wait(self) -> None:
         engine, board = _engine(["wR . bK"])
@@ -246,9 +244,9 @@ class TestGameOverHardening(unittest.TestCase):
         engine.request_move(Position(0, 0), Position(0, 2))
         engine.wait(2000)
 
-        self.assertEqual(king.state, "captured")
+        assert king.state == "captured"
 
         engine.wait(5000)
 
-        self.assertEqual(king.state, "captured")
-        self.assertEqual(board.get_piece(Position(0, 2)).color, "w")
+        assert king.state == "captured"
+        assert board.get_piece(Position(0, 2)).color == "w"
