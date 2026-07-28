@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import unittest
+import pytest
 
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.io.board_parser import parse_board
@@ -70,13 +70,13 @@ def test_intermediate_king_capture_completes_and_logs_winning_move() -> None:
     )
     presentation.apply(events)
 
-    assert tuple(
-        entry.notation for entry in presentation.snapshot().white_actions
-    ) == ("R a2xc2",)
+    assert tuple(entry.notation for entry in presentation.snapshot().white_actions) == (
+        "R a2xc2",
+    )
     assert presentation.snapshot().black_actions == ()
 
 
-class TestEventCreation(unittest.TestCase):
+class TestEventCreation:
     def test_move_produces_move_started_and_move_completed(self) -> None:
         engine, _ = _engine(["wR . ."])
 
@@ -86,18 +86,18 @@ class TestEventCreation(unittest.TestCase):
         engine.wait(1000)
         completed_events = engine.consume_events()
 
-        self.assertEqual(
-            started_events, (MoveStarted("wR_0_0", Position(0, 0), Position(0, 1)),)
+        assert started_events == (
+            MoveStarted("wR_0_0", Position(0, 0), Position(0, 1)),
         )
-        self.assertIn(
+        assert (
             MoveCompleted(
                 piece_id="wR_0_0",
                 piece_kind="R",
                 piece_color="w",
                 source=Position(0, 0),
                 destination=Position(0, 1),
-            ),
-            completed_events,
+            )
+            in completed_events
         )
 
     def test_jump_produces_jump_started_and_jump_completed(self) -> None:
@@ -109,18 +109,18 @@ class TestEventCreation(unittest.TestCase):
         engine.wait(1000)
         completed_events = engine.consume_events()
 
-        self.assertEqual(
-            started_events, (JumpStarted("wK_0_1", Position(0, 1), Position(0, 1)),)
+        assert started_events == (
+            JumpStarted("wK_0_1", Position(0, 1), Position(0, 1)),
         )
-        self.assertIn(
+        assert (
             JumpCompleted(
                 piece_id="wK_0_1",
                 piece_kind="K",
                 piece_color="w",
                 source=Position(0, 1),
                 destination=Position(0, 1),
-            ),
-            completed_events,
+            )
+            in completed_events
         )
 
     def test_capture_produces_piece_captured(self) -> None:
@@ -131,7 +131,7 @@ class TestEventCreation(unittest.TestCase):
         engine.wait(2000)
 
         events = engine.consume_events()
-        self.assertIn(
+        assert (
             PieceCaptured(
                 captured_piece_id="bR_0_2",
                 captured_piece_kind="R",
@@ -139,8 +139,8 @@ class TestEventCreation(unittest.TestCase):
                 by_piece_id="wR_0_0",
                 by_piece_color="w",
                 position=Position(0, 2),
-            ),
-            events,
+            )
+            in events
         )
 
     def test_promotion_produces_piece_promoted(self) -> None:
@@ -150,7 +150,7 @@ class TestEventCreation(unittest.TestCase):
         engine.wait(1000)
 
         events = engine.consume_events()
-        self.assertIn(PiecePromoted(piece_id="wP_1_0", new_kind="Q"), events)
+        assert PiecePromoted(piece_id="wP_1_0", new_kind="Q") in events
 
     def test_move_produces_rest_started(self) -> None:
         engine, _ = _engine(["wR . ."])
@@ -159,8 +159,9 @@ class TestEventCreation(unittest.TestCase):
         engine.wait(1000)
 
         events = engine.consume_events()
-        self.assertIn(
-            RestStarted(piece_id="wR_0_0", rest_kind="long_rest", duration_ms=10000), events
+        assert (
+            RestStarted(piece_id="wR_0_0", rest_kind="long_rest", duration_ms=10000)
+            in events
         )
 
     def test_rest_completion_produces_rest_completed(self) -> None:
@@ -172,7 +173,7 @@ class TestEventCreation(unittest.TestCase):
         engine.wait(10000)
         events = engine.consume_events()
 
-        self.assertIn(RestCompleted(piece_id="wR_0_0"), events)
+        assert RestCompleted(piece_id="wR_0_0") in events
 
     def test_king_capture_produces_game_over(self) -> None:
         engine, _ = _engine(["wR . bK"])
@@ -181,10 +182,10 @@ class TestEventCreation(unittest.TestCase):
         engine.wait(2000)
 
         events = engine.consume_events()
-        self.assertIn(GameOver(winner_color="w"), events)
+        assert GameOver(winner_color="w") in events
 
 
-class TestEventOrdering(unittest.TestCase):
+class TestEventOrdering:
     def test_move_completed_happens_before_rest_started(self) -> None:
         engine, _ = _engine(["wR . ."])
         engine.request_move(Position(0, 0), Position(0, 1))
@@ -203,17 +204,23 @@ class TestEventOrdering(unittest.TestCase):
             )
         )
         rest_started_index = next(
-            index for index, event in enumerate(events) if isinstance(event, RestStarted)
+            index
+            for index, event in enumerate(events)
+            if isinstance(event, RestStarted)
         )
-        self.assertLess(move_completed_index, rest_started_index)
+        assert move_completed_index < rest_started_index
 
-    def test_rest_started_happens_before_rest_completed_on_immediate_completion(self) -> None:
+    def test_rest_started_happens_before_rest_completed_on_immediate_completion(
+        self,
+    ) -> None:
         """The prompt's own example: motion completes, rest starts, rest completes — one wait()."""
         engine, _ = _engine(["wR . ."])
         engine.request_move(Position(0, 0), Position(0, 1))
         engine.consume_events()
 
-        engine.wait(11000)  # 1000ms motion + the full 10000ms long_rest in a single call
+        engine.wait(
+            11000
+        )  # 1000ms motion + the full 10000ms long_rest in a single call
         events = engine.consume_events()
 
         move_completed_index = events.index(
@@ -230,8 +237,8 @@ class TestEventOrdering(unittest.TestCase):
         )
         rest_completed_index = events.index(RestCompleted(piece_id="wR_0_0"))
 
-        self.assertLess(move_completed_index, rest_started_index)
-        self.assertLess(rest_started_index, rest_completed_index)
+        assert move_completed_index < rest_started_index
+        assert rest_started_index < rest_completed_index
 
     def test_events_emitted_in_correct_chronological_order(self) -> None:
         engine, _ = _engine([".", "wP"])
@@ -252,14 +259,16 @@ class TestEventOrdering(unittest.TestCase):
         )
         promoted_index = events.index(PiecePromoted(piece_id="wP_1_0", new_kind="Q"))
         rest_started_index = next(
-            index for index, event in enumerate(events) if isinstance(event, RestStarted)
+            index
+            for index, event in enumerate(events)
+            if isinstance(event, RestStarted)
         )
 
-        self.assertLess(move_completed_index, promoted_index)
-        self.assertLess(promoted_index, rest_started_index)
+        assert move_completed_index < promoted_index
+        assert promoted_index < rest_started_index
 
 
-class TestEventTiming(unittest.TestCase):
+class TestEventTiming:
     def test_wait_crossing_motion_boundary_produces_correct_sequence(self) -> None:
         engine, _ = _engine(["wR . . ."])
         engine.request_move(Position(0, 0), Position(0, 3))  # 3-cell move, 3000ms
@@ -267,19 +276,19 @@ class TestEventTiming(unittest.TestCase):
 
         engine.wait(1500)  # still mid-flight
         mid_flight_events = engine.consume_events()
-        self.assertEqual(mid_flight_events, ())
+        assert mid_flight_events == ()
 
         engine.wait(1500)  # now arrives at 3000ms total
         arrival_events = engine.consume_events()
-        self.assertIn(
+        assert (
             MoveCompleted(
                 piece_id="wR_0_0",
                 piece_kind="R",
                 piece_color="w",
                 source=Position(0, 0),
                 destination=Position(0, 3),
-            ),
-            arrival_events,
+            )
+            in arrival_events
         )
 
     def test_wait_crossing_rest_boundary_produces_rest_completed(self) -> None:
@@ -290,14 +299,14 @@ class TestEventTiming(unittest.TestCase):
 
         engine.wait(1000)  # rest still active
         mid_rest_events = engine.consume_events()
-        self.assertEqual(mid_rest_events, ())
+        assert mid_rest_events == ()
 
         engine.wait(1000)  # rest completes (total elapsed 2000ms)
         completed_events = engine.consume_events()
-        self.assertIn(RestCompleted(piece_id="wK_0_1"), completed_events)
+        assert RestCompleted(piece_id="wK_0_1") in completed_events
 
 
-class TestEventConcurrency(unittest.TestCase):
+class TestEventConcurrency:
     def test_multiple_pieces_produce_independent_events(self) -> None:
         engine, _ = _engine(["wR . .", ". . .", "bR . ."])
         engine.request_move(Position(0, 0), Position(0, 1))
@@ -307,25 +316,25 @@ class TestEventConcurrency(unittest.TestCase):
         engine.wait(1000)
         events = engine.consume_events()
 
-        self.assertIn(
+        assert (
             MoveCompleted(
                 piece_id="wR_0_0",
                 piece_kind="R",
                 piece_color="w",
                 source=Position(0, 0),
                 destination=Position(0, 1),
-            ),
-            events,
+            )
+            in events
         )
-        self.assertIn(
+        assert (
             MoveCompleted(
                 piece_id="bR_2_0",
                 piece_kind="R",
                 piece_color="b",
                 source=Position(2, 0),
                 destination=Position(2, 1),
-            ),
-            events,
+            )
+            in events
         )
 
     def test_event_order_is_deterministic_across_runs(self) -> None:
@@ -337,16 +346,18 @@ class TestEventConcurrency(unittest.TestCase):
             engine.wait(1000)
             return engine.consume_events()
 
-        self.assertEqual(_run(), _run())
+        assert _run() == _run()
 
 
-class TestChronologicalBoundaryOrdering(unittest.TestCase):
+class TestChronologicalBoundaryOrdering:
     """A single wait() may cross several boundaries; each must resolve in
     simulated-time order, since an earlier arrival can cancel or start a
     later completion (e.g. a capture cancelling a resting piece's cooldown).
     """
 
-    def test_motion_completing_before_existing_rest_orders_move_completed_first(self) -> None:
+    def test_motion_completing_before_existing_rest_orders_move_completed_first(
+        self,
+    ) -> None:
         engine, _ = _engine(["wK . . .", ". . . .", "wR . . .", ". . . ."])
         engine.jump(Position(0, 0))
         engine.wait(1000)  # jump completes; short_rest(2000ms) starts, 2000ms remaining
@@ -368,9 +379,11 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
             )
         )
         rest_completed_index = events.index(RestCompleted(piece_id="wK_0_0"))
-        self.assertLess(move_completed_index, rest_completed_index)
+        assert move_completed_index < rest_completed_index
 
-    def test_existing_rest_completing_before_motion_orders_rest_completed_first(self) -> None:
+    def test_existing_rest_completing_before_motion_orders_rest_completed_first(
+        self,
+    ) -> None:
         engine, _ = _engine(["wK . . .", "wR . . ."])
         engine.jump(Position(0, 0))
         engine.wait(1000)  # jump completes; short_rest(2000ms) starts, 2000ms remaining
@@ -392,9 +405,11 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
                 destination=Position(1, 3),
             )
         )
-        self.assertLess(rest_completed_index, move_completed_index)
+        assert rest_completed_index < move_completed_index
 
-    def test_capturing_resting_piece_cancels_its_rest_without_rest_completed(self) -> None:
+    def test_capturing_resting_piece_cancels_its_rest_without_rest_completed(
+        self,
+    ) -> None:
         engine, _ = _engine(["wR . .", "bR . ."])
         engine.jump(Position(0, 0))
         engine.wait(1000)  # jump completes; short_rest(2000ms) starts, 2000ms remaining
@@ -403,10 +418,12 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
         engine.request_move(Position(1, 0), Position(0, 0))  # captures at 1000ms
         engine.consume_events()
 
-        engine.wait(2000)  # spans the capture (1000ms) and the rest's original 2000ms deadline
+        engine.wait(
+            2000
+        )  # spans the capture (1000ms) and the rest's original 2000ms deadline
         events = engine.consume_events()
 
-        self.assertIn(
+        assert (
             PieceCaptured(
                 captured_piece_id="wR_0_0",
                 captured_piece_kind="R",
@@ -414,16 +431,21 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
                 by_piece_id="bR_1_0",
                 by_piece_color="b",
                 position=Position(0, 0),
-            ),
-            events,
+            )
+            in events
         )
-        self.assertFalse(
-            any(isinstance(event, RestCompleted) and event.piece_id == "wR_0_0" for event in events)
+        assert not (
+            any(
+                (
+                    isinstance(event, RestCompleted) and event.piece_id == "wR_0_0"
+                    for event in events
+                )
+            )
         )
 
         snapshot = engine.snapshot()
-        self.assertFalse(any(rest.piece_id == "wR_0_0" for rest in snapshot.rests))
-        self.assertFalse(any(piece.id == "wR_0_0" for piece in snapshot.pieces))
+        assert not (any((rest.piece_id == "wR_0_0" for rest in snapshot.rests)))
+        assert not (any((piece.id == "wR_0_0" for piece in snapshot.pieces)))
 
     def test_rest_and_motion_completing_at_same_millisecond_use_tie_rule(self) -> None:
         engine, _ = _engine(["wK . . .", "wR . . ."])
@@ -434,7 +456,9 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
         engine.request_move(Position(1, 0), Position(1, 2))  # 2-cell move, 2000ms
         engine.consume_events()
 
-        engine.wait(2000)  # rest and move both complete at the same simulated millisecond
+        engine.wait(
+            2000
+        )  # rest and move both complete at the same simulated millisecond
         events = engine.consume_events()
 
         rest_completed_index = events.index(RestCompleted(piece_id="wK_0_0"))
@@ -447,25 +471,37 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
                 destination=Position(1, 2),
             )
         )
-        self.assertLess(rest_completed_index, move_completed_index)
+        assert rest_completed_index < move_completed_index
 
-    def test_two_motions_and_two_rests_completing_at_different_boundaries_stay_ordered(self) -> None:
+    def test_two_motions_and_two_rests_completing_at_different_boundaries_stay_ordered(
+        self,
+    ) -> None:
         board = parse_board(["wK . . .", "wR . . .", "wR . . .", "wR . . ."])
         arbiter = RealTimeArbiter(short_cooldown_ms=500, long_cooldown_ms=4000)
         engine = GameEngine(board, RuleEngine(), arbiter)
 
         engine.jump(Position(0, 0))  # king: jump, then short_rest(500ms)
-        engine.request_move(Position(1, 0), Position(1, 1))  # piece D: 1-cell, completes with the jump
+        engine.request_move(
+            Position(1, 0), Position(1, 1)
+        )  # piece D: 1-cell, completes with the jump
         engine.consume_events()
 
-        engine.wait(1000)  # jump + D's move complete; king's rest(500ms) and D's rest(4000ms) start
+        engine.wait(
+            1000
+        )  # jump + D's move complete; king's rest(500ms) and D's rest(4000ms) start
         engine.consume_events()
 
-        engine.request_move(Position(2, 0), Position(2, 1))  # piece B: 1-cell, 1000ms from now
-        engine.request_move(Position(3, 0), Position(3, 3))  # piece C: 3-cell, 3000ms from now
+        engine.request_move(
+            Position(2, 0), Position(2, 1)
+        )  # piece B: 1-cell, 1000ms from now
+        engine.request_move(
+            Position(3, 0), Position(3, 3)
+        )  # piece C: 3-cell, 3000ms from now
         engine.consume_events()
 
-        engine.wait(4000)  # boundaries at 500 (king rest), 1000 (B), 3000 (C), 4000 (D rest)
+        engine.wait(
+            4000
+        )  # boundaries at 500 (king rest), 1000 (B), 3000 (C), 4000 (D rest)
         events = engine.consume_events()
 
         rest_a_index = events.index(RestCompleted(piece_id="wK_0_0"))
@@ -489,9 +525,9 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
         )
         rest_d_index = events.index(RestCompleted(piece_id="wR_1_0"))
 
-        self.assertLess(rest_a_index, move_b_index)
-        self.assertLess(move_b_index, move_c_index)
-        self.assertLess(move_c_index, rest_d_index)
+        assert rest_a_index < move_b_index
+        assert move_b_index < move_c_index
+        assert move_c_index < rest_d_index
 
     def test_jump_arrival_starting_rest_that_completes_within_same_wait(self) -> None:
         engine, _ = _engine([". wK ."])
@@ -515,10 +551,12 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
         )
         rest_completed_index = events.index(RestCompleted(piece_id="wK_0_1"))
 
-        self.assertLess(jump_completed_index, rest_started_index)
-        self.assertLess(rest_started_index, rest_completed_index)
+        assert jump_completed_index < rest_started_index
+        assert rest_started_index < rest_completed_index
 
-    def test_capturing_resting_king_produces_game_over_without_rest_completed(self) -> None:
+    def test_capturing_resting_king_produces_game_over_without_rest_completed(
+        self,
+    ) -> None:
         engine, _ = _engine(["bK . .", "wR . ."])
         engine.jump(Position(0, 0))
         engine.wait(1000)  # jump completes; short_rest(2000ms) starts, 2000ms remaining
@@ -527,10 +565,12 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
         engine.request_move(Position(1, 0), Position(0, 0))  # captures at 1000ms
         engine.consume_events()
 
-        engine.wait(2000)  # spans the capture (1000ms) and the rest's original 2000ms deadline
+        engine.wait(
+            2000
+        )  # spans the capture (1000ms) and the rest's original 2000ms deadline
         events = engine.consume_events()
 
-        self.assertIn(
+        assert (
             PieceCaptured(
                 captured_piece_id="bK_0_0",
                 captured_piece_kind="K",
@@ -538,17 +578,22 @@ class TestChronologicalBoundaryOrdering(unittest.TestCase):
                 by_piece_id="wR_1_0",
                 by_piece_color="w",
                 position=Position(0, 0),
-            ),
-            events,
+            )
+            in events
         )
-        self.assertIn(GameOver(winner_color="w"), events)
-        self.assertFalse(
-            any(isinstance(event, RestCompleted) and event.piece_id == "bK_0_0" for event in events)
+        assert GameOver(winner_color="w") in events
+        assert not (
+            any(
+                (
+                    isinstance(event, RestCompleted) and event.piece_id == "bK_0_0"
+                    for event in events
+                )
+            )
         )
-        self.assertTrue(engine.game_over)
+        assert engine.game_over
 
 
-class TestApprovedCaptureEventOrder(unittest.TestCase):
+class TestApprovedCaptureEventOrder:
     """Approved order: PieceCaptured, MoveCompleted/JumpCompleted, PiecePromoted
     (when relevant), GameOver (when relevant), RestStarted (unless game over
     prevents rest).
@@ -562,26 +607,23 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         engine.wait(2000)
         events = engine.consume_events()
 
-        self.assertEqual(
-            events,
-            (
-                PieceCaptured(
-                    captured_piece_id="bK_0_2",
-                    captured_piece_kind="K",
-                    captured_piece_color="b",
-                    by_piece_id="wR_0_0",
-                    by_piece_color="w",
-                    position=Position(0, 2),
-                ),
-                MoveCompleted(
-                    piece_id="wR_0_0",
-                    piece_kind="R",
-                    piece_color="w",
-                    source=Position(0, 0),
-                    destination=Position(0, 2),
-                ),
-                GameOver(winner_color="w"),
+        assert events == (
+            PieceCaptured(
+                captured_piece_id="bK_0_2",
+                captured_piece_kind="K",
+                captured_piece_color="b",
+                by_piece_id="wR_0_0",
+                by_piece_color="w",
+                position=Position(0, 2),
             ),
+            MoveCompleted(
+                piece_id="wR_0_0",
+                piece_kind="R",
+                piece_color="w",
+                source=Position(0, 0),
+                destination=Position(0, 2),
+            ),
+            GameOver(winner_color="w"),
         )
 
     def test_jump_king_capture_exact_order(self) -> None:
@@ -621,12 +663,14 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         )
         game_over_index = events.index(GameOver(winner_color="w"))
 
-        self.assertLess(captured_index, jump_completed_index)
-        self.assertLess(jump_completed_index, game_over_index)
-        self.assertFalse(
+        assert captured_index < jump_completed_index
+        assert jump_completed_index < game_over_index
+        assert not (
             any(
-                isinstance(event, RestStarted) and event.piece_id == "wP_1_0"
-                for event in events
+                (
+                    isinstance(event, RestStarted) and event.piece_id == "wP_1_0"
+                    for event in events
+                )
             )
         )
 
@@ -638,27 +682,24 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         engine.wait(1000)
         events = engine.consume_events()
 
-        self.assertEqual(
-            events,
-            (
-                PieceCaptured(
-                    captured_piece_id="bK_0_0",
-                    captured_piece_kind="K",
-                    captured_piece_color="b",
-                    by_piece_id="wP_1_1",
-                    by_piece_color="w",
-                    position=Position(0, 0),
-                ),
-                MoveCompleted(
-                    piece_id="wP_1_1",
-                    piece_kind="P",
-                    piece_color="w",
-                    source=Position(1, 1),
-                    destination=Position(0, 0),
-                ),
-                PiecePromoted(piece_id="wP_1_1", new_kind="Q"),
-                GameOver(winner_color="w"),
+        assert events == (
+            PieceCaptured(
+                captured_piece_id="bK_0_0",
+                captured_piece_kind="K",
+                captured_piece_color="b",
+                by_piece_id="wP_1_1",
+                by_piece_color="w",
+                position=Position(0, 0),
             ),
+            MoveCompleted(
+                piece_id="wP_1_1",
+                piece_kind="P",
+                piece_color="w",
+                source=Position(1, 1),
+                destination=Position(0, 0),
+            ),
+            PiecePromoted(piece_id="wP_1_1", new_kind="Q"),
+            GameOver(winner_color="w"),
         )
 
     def test_promoted_pawn_captured_later_reports_current_kind(self) -> None:
@@ -673,7 +714,7 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         engine.wait(2000)
         events = engine.consume_events()
 
-        self.assertIn(
+        assert (
             PieceCaptured(
                 captured_piece_id="wP_1_0",
                 captured_piece_kind="Q",
@@ -681,8 +722,8 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
                 by_piece_id="bR_2_0",
                 by_piece_color="b",
                 position=Position(0, 0),
-            ),
-            events,
+            )
+            in events
         )
 
     def test_move_completed_contains_full_payload(self) -> None:
@@ -693,15 +734,15 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         engine.wait(1000)
         events = engine.consume_events()
 
-        self.assertIn(
+        assert (
             MoveCompleted(
                 piece_id="wR_0_0",
                 piece_kind="R",
                 piece_color="w",
                 source=Position(0, 0),
                 destination=Position(0, 1),
-            ),
-            events,
+            )
+            in events
         )
 
     def test_jump_completed_contains_full_payload(self) -> None:
@@ -712,15 +753,15 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         engine.wait(1000)
         events = engine.consume_events()
 
-        self.assertIn(
+        assert (
             JumpCompleted(
                 piece_id="wK_0_1",
                 piece_kind="K",
                 piece_color="w",
                 source=Position(0, 1),
                 destination=Position(0, 1),
-            ),
-            events,
+            )
+            in events
         )
 
     def test_simultaneous_king_captures_first_arrival_wins(self) -> None:
@@ -730,39 +771,40 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         arrival ordering.
         """
         engine, board = _engine(["wK bR", "bK wR"])
-        engine.request_move(Position(1, 1), Position(1, 0))  # white rook: scheduled first
-        engine.request_move(Position(0, 1), Position(0, 0))  # black rook: scheduled second
+        engine.request_move(
+            Position(1, 1), Position(1, 0)
+        )  # white rook: scheduled first
+        engine.request_move(
+            Position(0, 1), Position(0, 0)
+        )  # black rook: scheduled second
         engine.consume_events()
 
         engine.wait(1000)
         events = engine.consume_events()
 
-        self.assertEqual(
-            events,
-            (
-                PieceCaptured(
-                    captured_piece_id="bK_1_0",
-                    captured_piece_kind="K",
-                    captured_piece_color="b",
-                    by_piece_id="wR_1_1",
-                    by_piece_color="w",
-                    position=Position(1, 0),
-                ),
-                MoveCompleted(
-                    piece_id="wR_1_1",
-                    piece_kind="R",
-                    piece_color="w",
-                    source=Position(1, 1),
-                    destination=Position(1, 0),
-                ),
-                GameOver(winner_color="w"),
+        assert events == (
+            PieceCaptured(
+                captured_piece_id="bK_1_0",
+                captured_piece_kind="K",
+                captured_piece_color="b",
+                by_piece_id="wR_1_1",
+                by_piece_color="w",
+                position=Position(1, 0),
             ),
+            MoveCompleted(
+                piece_id="wR_1_1",
+                piece_kind="R",
+                piece_color="w",
+                source=Position(1, 1),
+                destination=Position(1, 0),
+            ),
+            GameOver(winner_color="w"),
         )
 
         white_king = board.get_piece(Position(0, 0))
-        self.assertIsNotNone(white_king)
-        self.assertNotEqual(white_king.state, "captured")
-        self.assertTrue(engine.game_over)
+        assert white_king is not None
+        assert white_king.state != "captured"
+        assert engine.game_over
 
     def test_no_rest_started_emitted_after_game_over(self) -> None:
         engine, _ = _engine(["wR . bK"])
@@ -771,9 +813,9 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         events = engine.consume_events()
 
         game_over_index = events.index(GameOver(winner_color="w"))
-        self.assertFalse(any(isinstance(event, RestStarted) for event in events))
-        self.assertFalse(
-            any(isinstance(event, RestStarted) for event in events[game_over_index:])
+        assert not (any((isinstance(event, RestStarted) for event in events)))
+        assert not (
+            any((isinstance(event, RestStarted) for event in events[game_over_index:]))
         )
 
     def test_gameover_is_final_event_emitted(self) -> None:
@@ -783,7 +825,7 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         engine.wait(2000)
         events = engine.consume_events()
 
-        self.assertIsInstance(events[-1], GameOver)
+        assert isinstance(events[-1], GameOver)
 
     def test_exactly_one_gameover_event_for_simultaneous_king_captures(self) -> None:
         engine, _ = _engine(["wK bR", "bK wR"])
@@ -794,10 +836,10 @@ class TestApprovedCaptureEventOrder(unittest.TestCase):
         engine.wait(1000)
         events = engine.consume_events()
 
-        self.assertEqual(sum(1 for e in events if isinstance(e, GameOver)), 1)
+        assert sum((1 for e in events if isinstance(e, GameOver))) == 1
 
 
-class TestGameOverEventFreeze(unittest.TestCase):
+class TestGameOverEventFreeze:
     """Verify that no public event of any kind is emitted once a wait()
     call has already ended the game — including in a later, separate
     wait() call that would otherwise complete an action left in flight.
@@ -811,36 +853,44 @@ class TestGameOverEventFreeze(unittest.TestCase):
 
         engine.request_move(Position(0, 0), Position(0, 2))  # captures king in 2000ms
         engine.wait(2000)
-        self.assertTrue(engine.game_over)
+        assert engine.game_over
         engine.consume_events()
 
-        engine.wait(20000)  # would finish wN's rest (8000ms left) if the bug were present
+        engine.wait(
+            20000
+        )  # would finish wN's rest (8000ms left) if the bug were present
         events = engine.consume_events()
 
-        self.assertEqual(events, ())
-        self.assertFalse(any(isinstance(e, RestCompleted) for e in events))
+        assert events == ()
+        assert not (any((isinstance(e, RestCompleted) for e in events)))
 
     def test_no_movecompleted_emitted_in_later_wait_after_game_over(self) -> None:
         engine, _ = _engine(["bK wR . . . wN", ". . . . . ."])
         engine.request_move(Position(0, 5), Position(1, 3))  # knight, 3000ms
-        engine.request_move(Position(0, 1), Position(0, 0))  # rook captures king, 1000ms
+        engine.request_move(
+            Position(0, 1), Position(0, 0)
+        )  # rook captures king, 1000ms
         engine.consume_events()
 
         engine.wait(1000)
-        self.assertTrue(engine.game_over)
+        assert engine.game_over
         engine.consume_events()
 
-        engine.wait(10000)  # would finish the knight's move (2000ms left) if the bug were present
+        engine.wait(
+            10000
+        )  # would finish the knight's move (2000ms left) if the bug were present
         events = engine.consume_events()
 
-        self.assertEqual(events, ())
+        assert events == ()
 
 
-class TestEventImmutability(unittest.TestCase):
+class TestEventImmutability:
     def test_events_are_immutable(self) -> None:
-        event = MoveStarted(piece_id="wR_0_0", source=Position(0, 0), destination=Position(0, 1))
+        event = MoveStarted(
+            piece_id="wR_0_0", source=Position(0, 0), destination=Position(0, 1)
+        )
 
-        with self.assertRaises(AttributeError):
+        with pytest.raises(AttributeError):
             setattr(event, "piece_id", "changed")  # noqa: B010
 
     def test_consume_events_clears_internal_queue(self) -> None:
@@ -850,8 +900,8 @@ class TestEventImmutability(unittest.TestCase):
         first_call = engine.consume_events()
         second_call = engine.consume_events()
 
-        self.assertGreater(len(first_call), 0)
-        self.assertEqual(second_call, ())
+        assert len(first_call) > 0
+        assert second_call == ()
 
     def test_returned_event_tuple_is_not_mutable(self) -> None:
         engine, _ = _engine(["wR . ."])
@@ -859,11 +909,7 @@ class TestEventImmutability(unittest.TestCase):
 
         events = engine.consume_events()
 
-        with self.assertRaises(AttributeError):
+        with pytest.raises(AttributeError):
             getattr(events, "append")(  # noqa: B009
                 MoveStarted("x", Position(0, 0), Position(0, 1))
             )
-
-
-if __name__ == "__main__":
-    unittest.main()
