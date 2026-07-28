@@ -227,6 +227,15 @@ class GameEngine:
 
         if winner_color is not None and not event.is_final:
             self._arbiter.stop_motion(piece.id)
+            self._emit(
+                MoveCompleted(
+                    piece_id=piece.id,
+                    piece_kind=piece.kind,
+                    piece_color=piece.color,
+                    source=event.original_source or event.source,
+                    destination=event.destination,
+                )
+            )
             self._emit(GameOver(winner_color=winner_color))
             return
 

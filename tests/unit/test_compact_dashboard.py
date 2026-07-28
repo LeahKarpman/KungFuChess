@@ -11,15 +11,21 @@ from kungfu_chess.model.position import Position
 from kungfu_chess.ui import game_window
 from kungfu_chess.ui.game_window import GAME_BOARD_LAYOUT, SPRITE_SIZE, _build_renderer
 from kungfu_chess.ui.img import Img
-from kungfu_chess.ui.presentation import GamePresentationSnapshot
+from kungfu_chess.ui.presentation import GamePresentationSnapshot, MoveLogEntry
 from kungfu_chess.ui.renderer import (
     FRAME_HEIGHT,
     FRAME_WIDTH,
     HUD_BACKGROUND_COLOR,
     LEFT_PANEL_X,
+    PANEL_BOTTOM_PADDING,
+    PANEL_ENTRY_LINE_HEIGHT,
+    PANEL_FIRST_ENTRY_BASELINE,
+    PANEL_HEIGHT,
+    PANEL_Y,
     PANEL_WIDTH,
     RIGHT_PANEL_X,
     BoardRenderer,
+    GameRenderer,
 )
 
 ASSETS_ROOT = Path(game_window.__file__).resolve().parent / "assets"
@@ -84,6 +90,30 @@ class RecordingCanvas(Img):
     ) -> None:
         self.rectangle_calls.append((top_left, bottom_right, color, thickness))
         super().draw_rectangle(top_left, bottom_right, color, thickness)
+
+
+class RecordingDashboardImage(Img):
+    def __init__(self) -> None:
+        super().__init__()
+        self.text_calls: list[tuple[str, int, int]] = []
+
+    def put_text(
+        self,
+        txt: str,
+        x: int,
+        y: int,
+        font_size: float,
+        color=(255, 255, 255, 255),
+        thickness: int = 1,
+    ) -> None:
+        self.text_calls.append((txt, x, y))
+
+
+class DashboardBoardRenderer:
+    layout = GAME_BOARD_LAYOUT
+
+    def render_on(self, canvas, snapshot, selected) -> None:
+        pass
 
 
 def test_standard_renderer_and_mapper_share_the_exact_layout_instance() -> None:
@@ -216,3 +246,48 @@ def test_resize_preserves_sprite_transparency_channel() -> None:
     assert sprite.pixels.shape == (SPRITE_SIZE, SPRITE_SIZE, 4)
     assert sprite.pixels[:, :, 3].min() == 0
     assert sprite.pixels[:, :, 3].max() == 255
+
+
+def test_renderer_shows_newest_fitting_moves_in_chronological_order() -> None:
+    images: list[RecordingDashboardImage] = []
+
+    def image_factory() -> RecordingDashboardImage:
+        image = RecordingDashboardImage()
+        images.append(image)
+        return image
+
+    visible_count = (
+        PANEL_HEIGHT - PANEL_BOTTOM_PADDING - PANEL_FIRST_ENTRY_BASELINE
+    ) // PANEL_ENTRY_LINE_HEIGHT + 1
+    history = tuple(
+        MoveLogEntry(f"white_{index}", "w", f"move-{index}")
+        for index in range(visible_count + 3)
+    )
+    renderer = GameRenderer(
+        DashboardBoardRenderer(),
+        image_factory=image_factory,
+    )
+
+    frame = renderer.render(
+        object(),
+        None,
+        GamePresentationSnapshot(0, 0, history, ()),
+    )
+
+    rendered_moves = [
+        (text, y) for text, _, y in frame.text_calls if text.startswith("move-")
+    ]
+    assert [text for text, _ in rendered_moves] == [
+        f"move-{index}" for index in range(3, visible_count + 3)
+    ]
+    assert len(rendered_moves) == visible_count
+    assert all(
+        y <= PANEL_Y + PANEL_HEIGHT - PANEL_BOTTOM_PADDING
+        for _, y in rendered_moves
+    )
+    assert all(y <= PANEL_Y + PANEL_HEIGHT for _, _, y in frame.text_calls)
+    assert (
+        PANEL_FIRST_ENTRY_BASELINE + visible_count * PANEL_ENTRY_LINE_HEIGHT
+        > PANEL_HEIGHT - PANEL_BOTTOM_PADDING
+    )
+    assert "Moves" in {text for text, _, _ in frame.text_calls}

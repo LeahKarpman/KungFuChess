@@ -1,4 +1,4 @@
-"""Event-driven presentation state for scores and recent completed actions."""
+"""Event-driven presentation state for scores and completed action history."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,7 +14,6 @@ from ..model.events import (
 )
 from ..model.position import Position
 
-RECENT_ACTIONS_DISPLAY_LIMIT = 5
 _COLORS = frozenset({"w", "b"})
 
 
@@ -29,7 +28,7 @@ class MoveLogEntry:
 
 @dataclass(frozen=True)
 class GamePresentationSnapshot:
-    """Immutable score and recent-log data consumed by the HUD renderer."""
+    """Immutable score and complete action history consumed by the HUD renderer."""
 
     white_score: int
     black_score: int
@@ -38,7 +37,7 @@ class GamePresentationSnapshot:
 
 
 class GamePresentation:
-    """Project engine events into display-only score and move-log state."""
+    """Project engine events into display-only score and full move-log state."""
 
     def __init__(self, piece_values: Mapping[str, int], board_height: int) -> None:
         if board_height <= 0:
@@ -106,15 +105,13 @@ class GamePresentation:
         else:
             notation = f"{event.piece_kind} {source}{separator}{destination}"
 
-        actions = self._actions[event.piece_color]
-        actions.append(
+        self._actions[event.piece_color].append(
             MoveLogEntry(
                 piece_id=event.piece_id,
                 piece_color=event.piece_color,
                 notation=notation,
             )
         )
-        del actions[:-RECENT_ACTIONS_DISPLAY_LIMIT]
 
     def _append_promotion(self, event: PiecePromoted) -> None:
         for actions in self._actions.values():
