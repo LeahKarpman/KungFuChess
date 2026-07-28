@@ -85,6 +85,26 @@ class Img:
 
         return self
 
+    def resize(
+        self,
+        width: int,
+        height: int,
+        interpolation: int = cv2.INTER_AREA,
+    ) -> Img:
+        """Resize loaded pixels while preserving their existing channel count."""
+        if self.img is None:
+            raise ValueError("Image not loaded.")
+        if width <= 0 or height <= 0:
+            raise ValueError(
+                f"Image dimensions must be positive, got {width}x{height}."
+            )
+        self.img = self._cv.resize(
+            self.img,
+            (width, height),
+            interpolation=interpolation,
+        )
+        return self
+
     def draw_on(self, other_img, x, y):
         if self.img is None or other_img.img is None:
             raise ValueError("Both images must be loaded before drawing.")

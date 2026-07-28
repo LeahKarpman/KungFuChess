@@ -8,7 +8,7 @@ from ..model.position import Position
 from .animation import clamp_progress, lerp_point
 from .img import Img
 from .layout import BoardLayout
-from .presentation import GamePresentationSnapshot
+from .presentation import GamePresentationSnapshot, MoveLogEntry
 from .sprite_loader import SpriteLoader
 
 SELECTION_BORDER_COLOR = (
@@ -19,25 +19,32 @@ SELECTION_BORDER_COLOR = (
 )  # BGRA yellow, opaque: visible on light and dark cells
 SELECTION_BORDER_THICKNESS = 3
 GAME_OVER_TEXT = "GAME OVER"
-GAME_OVER_TEXT_ORIGIN = (220, 422)
 GAME_OVER_FONT_SIZE = 2.0
 GAME_OVER_OUTLINE_COLOR = (0, 0, 0, 255)
 GAME_OVER_TEXT_COLOR = (255, 255, 255, 255)
 GAME_OVER_OUTLINE_THICKNESS = 8
 GAME_OVER_TEXT_THICKNESS = 3
 SUPPORTED_ACTION_KINDS = frozenset({"move", "jump"})
-HUD_HEIGHT = 210
-HUD_BACKGROUND_COLOR = (34, 34, 34, 255)
+FRAME_WIDTH = 1096
+FRAME_HEIGHT = 636
+PANEL_WIDTH = 220
+PANEL_HEIGHT = 576
+PANEL_Y = 30
+LEFT_PANEL_X = 20
+RIGHT_PANEL_X = 856
+PANEL_PADDING = 16
+PANEL_HEADING_BASELINE = 42
+PANEL_SCORE_BASELINE = 80
+PANEL_MOVES_BASELINE = 132
+PANEL_FIRST_ENTRY_BASELINE = 174
+PANEL_ENTRY_LINE_HEIGHT = 32
+HUD_BACKGROUND_COLOR = (28, 31, 36, 255)
+PANEL_BACKGROUND_COLOR = (42, 47, 54, 255)
+PANEL_BORDER_COLOR = (82, 91, 102, 255)
 HUD_TEXT_COLOR = (245, 245, 245, 255)
 HUD_HEADING_COLOR = (120, 210, 255, 255)
-HUD_MARGIN_X = 20
-HUD_COLUMN_GAP = 20
-HUD_SCORE_BASELINE = 32
-HUD_ACTIONS_BASELINE = 62
-HUD_FIRST_ENTRY_BASELINE = 91
-HUD_ENTRY_LINE_HEIGHT = 24
 HUD_FONT_SIZE = 0.65
-HUD_HEADING_FONT_SIZE = 0.72
+HUD_HEADING_FONT_SIZE = 0.82
 
 
 class BoardRenderer:
@@ -64,15 +71,19 @@ class BoardRenderer:
         self._image_factory = image_factory
         self._prepared_board: Img | None = None
 
+    @property
+    def layout(self) -> BoardLayout:
+        """Return the board geometry shared with rendering and input."""
+        return self._layout
+
     def _get_prepared_board(self) -> Img:
         """Load and resize the board image once, then reuse it for every frame."""
         if self._prepared_board is None:
             pixel_size = self._layout.board_pixel_size(
                 self._expected_width, self._expected_height
             )
-            self._prepared_board = self._image_factory().read(
-                self._board_image_path, size=pixel_size
-            )
+            self._prepared_board = self._image_factory().read(self._board_image_path)
+            self._prepared_board.resize(*pixel_size)
         return self._prepared_board
 
     def render(self, snapshot: GameSnapshot, selected: Position | None = None) -> Img:
@@ -93,9 +104,41 @@ class BoardRenderer:
                 f"got {snapshot.width}x{snapshot.height}"
             )
 
-        motions_by_piece_id, rests_by_piece_id = self._index_motions_and_rests(snapshot)
+        board_width, board_height = self._layout.board_pixel_size(
+            self._expected_width,
+            self._expected_height,
+        )
+        canvas = self._image_factory().create(
+            self._layout.origin_x + board_width,
+            self._layout.origin_y + board_height,
+            (0, 0, 0, 0),
+        )
+        self.render_on(canvas, snapshot, selected)
+        return canvas
 
-        canvas = self._get_prepared_board().copy()
+    def render_on(
+        self,
+        canvas: Img,
+        snapshot: GameSnapshot,
+        selected: Position | None = None,
+    ) -> None:
+        """Render board content onto an existing composed frame."""
+        if (
+            snapshot.width != self._expected_width
+            or snapshot.height != self._expected_height
+        ):
+            raise ValueError(
+                "Unsupported board dimensions for the supplied board image: "
+                f"expected {self._expected_width}x{self._expected_height}, "
+                f"got {snapshot.width}x{snapshot.height}"
+            )
+
+        self._get_prepared_board().draw_on(
+            canvas,
+            self._layout.origin_x,
+            self._layout.origin_y,
+        )
+        motions_by_piece_id, rests_by_piece_id = self._index_motions_and_rests(snapshot)
 
         for piece in snapshot.pieces:
             if (
@@ -127,8 +170,6 @@ class BoardRenderer:
                     f"{snapshot.width}x{snapshot.height} board."
                 )
             self._draw_selection_border(canvas, selected)
-
-        return canvas
 
     @staticmethod
     def _index_motions_and_rests(
@@ -207,14 +248,19 @@ class BoardRenderer:
         )
         sprite.draw_on(canvas, x, y)
 
-    @staticmethod
-    def _draw_game_over_message(canvas: Img) -> None:
-        x, y = GAME_OVER_TEXT_ORIGIN
+    def _draw_game_over_message(self, canvas: Img) -> None:
+        board_width, board_height = self._layout.board_pixel_size(
+            self._expected_width,
+            self._expected_height,
+        )
+        x = self._layout.origin_x + round(board_width * 0.275)
+        y = self._layout.origin_y + round(board_height * 0.5275)
+        scale = self._layout.cell_size / 100
         canvas.put_text(
             GAME_OVER_TEXT,
             x,
             y,
-            GAME_OVER_FONT_SIZE,
+            GAME_OVER_FONT_SIZE * scale,
             color=GAME_OVER_OUTLINE_COLOR,
             thickness=GAME_OVER_OUTLINE_THICKNESS,
         )
@@ -222,7 +268,7 @@ class BoardRenderer:
             GAME_OVER_TEXT,
             x,
             y,
-            GAME_OVER_FONT_SIZE,
+            GAME_OVER_FONT_SIZE * scale,
             color=GAME_OVER_TEXT_COLOR,
             thickness=GAME_OVER_TEXT_THICKNESS,
         )
@@ -241,7 +287,7 @@ class BoardRenderer:
 
 
 class GameRenderer:
-    """Compose the unchanged board frame with a score-and-actions HUD below it."""
+    """Compose a compact dashboard with side panels around the centered board."""
 
     def __init__(
         self,
@@ -251,71 +297,97 @@ class GameRenderer:
         self._board_renderer = board_renderer
         self._image_factory = image_factory
 
+    @property
+    def layout(self) -> BoardLayout:
+        """Return the exact board geometry used by the composed renderer."""
+        return self._board_renderer.layout
+
     def render(
         self,
         snapshot: GameSnapshot,
         selected: Position | None,
         presentation: GamePresentationSnapshot,
     ) -> Img:
-        """Return the board at (0, 0) followed by a visible two-column HUD."""
-        board_frame = self._board_renderer.render(snapshot, selected)
-        board_height, board_width = board_frame.pixels.shape[:2]
+        """Return the complete board, scores, and recent-moves dashboard."""
         canvas = self._image_factory().create(
-            board_width,
-            board_height + HUD_HEIGHT,
+            FRAME_WIDTH,
+            FRAME_HEIGHT,
             HUD_BACKGROUND_COLOR,
         )
-        board_frame.draw_on(canvas, 0, 0)
-        self._draw_hud(canvas, board_width, board_height, presentation)
+        self._draw_panel_background(canvas, LEFT_PANEL_X)
+        self._draw_panel_background(canvas, RIGHT_PANEL_X)
+        self._board_renderer.render_on(canvas, snapshot, selected)
+        self._draw_panel(
+            canvas,
+            LEFT_PANEL_X,
+            "Black",
+            presentation.black_score,
+            presentation.black_actions,
+        )
+        self._draw_panel(
+            canvas,
+            RIGHT_PANEL_X,
+            "White",
+            presentation.white_score,
+            presentation.white_actions,
+        )
         return canvas
 
-    @staticmethod
-    def _draw_hud(
-        canvas: Img,
-        board_width: int,
-        board_height: int,
-        presentation: GamePresentationSnapshot,
-    ) -> None:
-        column_width = (board_width - HUD_COLUMN_GAP) // 2
-        columns = (
-            (
-                HUD_MARGIN_X,
-                "White",
-                presentation.white_score,
-                presentation.white_actions,
-            ),
-            (
-                column_width + HUD_COLUMN_GAP,
-                "Black",
-                presentation.black_score,
-                presentation.black_actions,
-            ),
+    def _draw_panel_background(self, canvas: Img, panel_x: int) -> None:
+        panel = self._image_factory().create(
+            PANEL_WIDTH,
+            PANEL_HEIGHT,
+            PANEL_BACKGROUND_COLOR,
         )
-        for x, color_name, score, actions in columns:
+        panel.draw_rectangle(
+            (1, 1),
+            (PANEL_WIDTH - 2, PANEL_HEIGHT - 2),
+            PANEL_BORDER_COLOR,
+            2,
+        )
+        panel.draw_on(canvas, panel_x, PANEL_Y)
+
+    @staticmethod
+    def _draw_panel(
+        canvas: Img,
+        panel_x: int,
+        color_name: str,
+        score: int,
+        actions: tuple[MoveLogEntry, ...],
+    ) -> None:
+        text_x = panel_x + PANEL_PADDING
+        canvas.put_text(
+            color_name.upper(),
+            text_x,
+            PANEL_Y + PANEL_HEADING_BASELINE,
+            HUD_HEADING_FONT_SIZE,
+            color=HUD_HEADING_COLOR,
+            thickness=2,
+        )
+        canvas.put_text(
+            f"Score: {score}",
+            text_x,
+            PANEL_Y + PANEL_SCORE_BASELINE,
+            HUD_HEADING_FONT_SIZE,
+            color=HUD_TEXT_COLOR,
+            thickness=2,
+        )
+        canvas.put_text(
+            "Recent moves",
+            text_x,
+            PANEL_Y + PANEL_MOVES_BASELINE,
+            HUD_FONT_SIZE,
+            color=HUD_TEXT_COLOR,
+            thickness=1,
+        )
+        for index, entry in enumerate(actions):
             canvas.put_text(
-                f"{color_name} score: {score}",
-                x,
-                board_height + HUD_SCORE_BASELINE,
-                HUD_HEADING_FONT_SIZE,
-                color=HUD_HEADING_COLOR,
-                thickness=2,
-            )
-            canvas.put_text(
-                f"Recent {color_name} actions:",
-                x,
-                board_height + HUD_ACTIONS_BASELINE,
+                entry.notation,
+                text_x,
+                PANEL_Y
+                + PANEL_FIRST_ENTRY_BASELINE
+                + index * PANEL_ENTRY_LINE_HEIGHT,
                 HUD_FONT_SIZE,
                 color=HUD_TEXT_COLOR,
                 thickness=1,
             )
-            for index, entry in enumerate(actions):
-                canvas.put_text(
-                    entry.notation,
-                    x,
-                    board_height
-                    + HUD_FIRST_ENTRY_BASELINE
-                    + index * HUD_ENTRY_LINE_HEIGHT,
-                    HUD_FONT_SIZE,
-                    color=HUD_TEXT_COLOR,
-                    thickness=1,
-                )

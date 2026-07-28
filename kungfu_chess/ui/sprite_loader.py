@@ -33,10 +33,14 @@ class SpriteLoader:
         assets_root: Path,
         image_factory: Callable[[], Img] = Img,
         frame_selector: Callable[[int, float, int, bool], int] = select_frame_index,
+        sprite_size: int | None = None,
     ) -> None:
+        if sprite_size is not None and sprite_size <= 0:
+            raise ValueError("sprite_size must be positive")
         self._assets_root = Path(assets_root)
         self._image_factory = image_factory
         self._frame_selector = frame_selector
+        self._sprite_size = sprite_size
         self._idle_cache: dict[tuple[str, str], Img] = {}
         self._animation_config_cache: dict[tuple[str, str, str], _AnimationConfig] = {}
         self._animation_frame_cache: dict[tuple[str, str, str, int], Img] = {}
@@ -51,7 +55,7 @@ class SpriteLoader:
             return cached
 
         sprite_path = self._piece_directory(kind, color) / IDLE_SPRITE_RELATIVE_PATH
-        sprite = self._image_factory().read(sprite_path)
+        sprite = self._load_sprite(sprite_path)
         self._idle_cache[key] = sprite
         return sprite
 
@@ -69,9 +73,15 @@ class SpriteLoader:
         if cached is not None:
             return cached
 
-        frame = self._image_factory().read(config.frame_paths[frame_index])
+        frame = self._load_sprite(config.frame_paths[frame_index])
         self._animation_frame_cache[cache_key] = frame
         return frame
+
+    def _load_sprite(self, path: Path) -> Img:
+        sprite = self._image_factory().read(path)
+        if self._sprite_size is not None:
+            sprite.resize(self._sprite_size, self._sprite_size)
+        return sprite
 
     @staticmethod
     def _validate_kind_and_color(kind: str, color: str) -> None:
