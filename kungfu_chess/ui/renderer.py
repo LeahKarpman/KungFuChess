@@ -38,6 +38,7 @@ PANEL_SCORE_BASELINE = 80
 PANEL_MOVES_BASELINE = 132
 PANEL_FIRST_ENTRY_BASELINE = 174
 PANEL_ENTRY_LINE_HEIGHT = 32
+PANEL_BOTTOM_PADDING = 20
 HUD_BACKGROUND_COLOR = (28, 31, 36, 255)
 PANEL_BACKGROUND_COLOR = (42, 47, 54, 255)
 PANEL_BORDER_COLOR = (82, 91, 102, 255)
@@ -373,14 +374,22 @@ class GameRenderer:
             thickness=2,
         )
         canvas.put_text(
-            "Recent moves",
+            "Moves",
             text_x,
             PANEL_Y + PANEL_MOVES_BASELINE,
             HUD_FONT_SIZE,
             color=HUD_TEXT_COLOR,
             thickness=1,
         )
-        for index, entry in enumerate(actions):
+        available_baseline_height = (
+            PANEL_HEIGHT - PANEL_BOTTOM_PADDING - PANEL_FIRST_ENTRY_BASELINE
+        )
+        visible_count = max(
+            0,
+            available_baseline_height // PANEL_ENTRY_LINE_HEIGHT + 1,
+        )
+        visible_actions = actions[-visible_count:] if visible_count else ()
+        for index, entry in enumerate(visible_actions):
             canvas.put_text(
                 entry.notation,
                 text_x,

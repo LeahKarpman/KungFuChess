@@ -13,7 +13,6 @@ from kungfu_chess.model.events import (
 )
 from kungfu_chess.model.position import Position
 from kungfu_chess.ui.presentation import (
-    RECENT_ACTIONS_DISPLAY_LIMIT,
     GamePresentation,
 )
 
@@ -204,22 +203,34 @@ def test_started_intermediate_rest_and_rejected_requests_create_no_log_entry() -
     assert snapshot.black_actions == ()
 
 
-def test_recent_log_limit_is_enforced_independently_for_each_color() -> None:
+def test_complete_histories_are_preserved_independently_for_each_color() -> None:
     presentation = _presentation()
+    white_count = 7
+    black_count = 8
     white_moves = tuple(
         _move(
             piece_id=f"white_rook_{index}",
             source=Position(7, index % 8),
             destination=Position(6, index % 8),
         )
-        for index in range(RECENT_ACTIONS_DISPLAY_LIMIT + 2)
+        for index in range(white_count)
+    )
+    black_moves = tuple(
+        _move(
+            piece_id=f"black_rook_{index}",
+            color="b",
+            source=Position(0, index % 8),
+            destination=Position(1, index % 8),
+        )
+        for index in range(black_count)
     )
 
-    presentation.apply(white_moves)
+    presentation.apply(white_moves + black_moves)
 
-    actions = presentation.snapshot().white_actions
-    assert len(actions) == RECENT_ACTIONS_DISPLAY_LIMIT
-    assert actions[0].piece_id == "white_rook_2"
-    assert actions[-1].piece_id == (
-        f"white_rook_{RECENT_ACTIONS_DISPLAY_LIMIT + 1}"
-    )
+    snapshot = presentation.snapshot()
+    assert len(snapshot.white_actions) == white_count
+    assert len(snapshot.black_actions) == black_count
+    assert snapshot.white_actions[0].piece_id == "white_rook_0"
+    assert snapshot.white_actions[-1].piece_id == "white_rook_6"
+    assert snapshot.black_actions[0].piece_id == "black_rook_0"
+    assert snapshot.black_actions[-1].piece_id == "black_rook_7"

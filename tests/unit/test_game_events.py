@@ -21,11 +21,59 @@ from kungfu_chess.model.events import (
 from kungfu_chess.model.position import Position
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.rules.rule_engine import RuleEngine
+from kungfu_chess.ui.presentation import GamePresentation
 
 
 def _engine(lines: list[str]) -> tuple[GameEngine, Board]:
     board = parse_board(lines)
     return GameEngine(board, RuleEngine(), RealTimeArbiter()), board
+
+
+def test_intermediate_king_capture_completes_and_logs_winning_move() -> None:
+    engine, board = _engine(["wR . . .", ". . bK ."])
+    engine.request_move(Position(0, 0), Position(0, 3))
+    engine.consume_events()
+    engine.wait(500)
+    engine.request_move(Position(1, 2), Position(0, 2))
+    engine.consume_events()
+    engine.wait(1000)
+    engine.consume_events()
+
+    engine.wait(500)
+    events = engine.consume_events()
+
+    assert events == (
+        PieceCaptured(
+            captured_piece_id="bK_1_2",
+            captured_piece_kind="K",
+            captured_piece_color="b",
+            by_piece_id="wR_0_0",
+            by_piece_color="w",
+            position=Position(0, 2),
+        ),
+        MoveCompleted(
+            piece_id="wR_0_0",
+            piece_kind="R",
+            piece_color="w",
+            source=Position(0, 0),
+            destination=Position(0, 2),
+        ),
+        GameOver(winner_color="w"),
+    )
+    assert not any(isinstance(event, RestStarted) for event in events)
+    assert board.get_piece(Position(0, 2)).id == "wR_0_0"
+    assert engine.snapshot().motions == ()
+
+    presentation = GamePresentation(
+        {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0},
+        board_height=2,
+    )
+    presentation.apply(events)
+
+    assert tuple(
+        entry.notation for entry in presentation.snapshot().white_actions
+    ) == ("R a2xc2",)
+    assert presentation.snapshot().black_actions == ()
 
 
 class TestEventCreation(unittest.TestCase):
