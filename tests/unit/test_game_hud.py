@@ -6,13 +6,20 @@ from kungfu_chess.input.board_mapper import BoardMapper
 from kungfu_chess.model.events import MoveCompleted
 from kungfu_chess.model.game_state import GameSnapshot
 from kungfu_chess.model.position import Position
-from kungfu_chess.ui.game_window import run_game, run_loop
+from kungfu_chess.ui.game_window import GAME_BOARD_LAYOUT, run_game, run_loop
 from kungfu_chess.ui.layout import BoardLayout
 from kungfu_chess.ui.presentation import (
     GamePresentationSnapshot,
     MoveLogEntry,
 )
-from kungfu_chess.ui.renderer import HUD_HEIGHT, GameRenderer
+from kungfu_chess.ui.renderer import (
+    FRAME_HEIGHT,
+    FRAME_WIDTH,
+    LEFT_PANEL_X,
+    PANEL_WIDTH,
+    RIGHT_PANEL_X,
+    GameRenderer,
+)
 
 
 class FakeFrame:
@@ -138,7 +145,8 @@ class RecordingImage:
     def __init__(self, width: int = 0, height: int = 0) -> None:
         self.pixels = FakePixels((height, width, 4))
         self.create_call = None
-        self.draw_call = None
+        self.draw_calls: list[tuple[object, int, int]] = []
+        self.rectangle_calls: list[tuple[object, ...]] = []
         self.text_calls: list[tuple[str, int, int]] = []
 
     def create(self, width: int, height: int, color):
@@ -147,7 +155,10 @@ class RecordingImage:
         return self
 
     def draw_on(self, other, x: int, y: int) -> None:
-        self.draw_call = (other, x, y)
+        self.draw_calls.append((other, x, y))
+
+    def draw_rectangle(self, top_left, bottom_right, color, thickness) -> None:
+        self.rectangle_calls.append((top_left, bottom_right, color, thickness))
 
     def put_text(
         self,
@@ -162,18 +173,16 @@ class RecordingImage:
 
 
 class FakeBoardRenderer:
-    def __init__(self, board_frame: RecordingImage) -> None:
-        self.board_frame = board_frame
+    def __init__(self, layout: BoardLayout) -> None:
+        self.layout = layout
         self.calls = []
 
-    def render(self, snapshot, selected):
-        self.calls.append((snapshot, selected))
-        return self.board_frame
+    def render_on(self, canvas, snapshot, selected):
+        self.calls.append((canvas, snapshot, selected))
 
 
-def test_final_frame_contains_unchanged_board_and_visible_scores_and_logs() -> None:
-    board_frame = RecordingImage(width=800, height=800)
-    board_renderer = FakeBoardRenderer(board_frame)
+def test_final_frame_contains_centered_board_and_side_scores_and_logs() -> None:
+    board_renderer = FakeBoardRenderer(GAME_BOARD_LAYOUT)
     created_images: list[RecordingImage] = []
 
     def image_factory() -> RecordingImage:
@@ -193,13 +202,27 @@ def test_final_frame_contains_unchanged_board_and_visible_scores_and_logs() -> N
     frame = renderer.render(snapshot, Position(0, 0), presentation)
 
     assert frame is created_images[0]
-    assert frame.pixels.shape == (800 + HUD_HEIGHT, 800, 4)
-    assert board_frame.draw_call == (frame, 0, 0)
-    rendered_text = {call[0] for call in frame.text_calls}
-    assert "White score: 5" in rendered_text
-    assert "Black score: 3" in rendered_text
-    assert "R a1xa8" in rendered_text
-    assert "N e4 (jump)" in rendered_text
+    assert frame.pixels.shape == (FRAME_HEIGHT, FRAME_WIDTH, 4)
+    assert board_renderer.calls == [(frame, snapshot, Position(0, 0))]
+    text_by_value = {call[0]: call for call in frame.text_calls}
+    assert text_by_value["BLACK"][1] == LEFT_PANEL_X + 16
+    assert text_by_value["Score: 3"][1] == LEFT_PANEL_X + 16
+    assert text_by_value["N e4 (jump)"][1] == LEFT_PANEL_X + 16
+    assert text_by_value["WHITE"][1] == RIGHT_PANEL_X + 16
+    assert text_by_value["Score: 5"][1] == RIGHT_PANEL_X + 16
+    assert text_by_value["R a1xa8"][1] == RIGHT_PANEL_X + 16
+
+
+def test_dashboard_geometry_fits_and_panels_are_outside_board() -> None:
+    board_width, board_height = GAME_BOARD_LAYOUT.board_pixel_size(8, 8)
+
+    assert FRAME_WIDTH <= 1200
+    assert FRAME_HEIGHT <= 760
+    assert (board_width, board_height) == (576, 576)
+    assert board_width < 800
+    assert LEFT_PANEL_X + PANEL_WIDTH <= GAME_BOARD_LAYOUT.origin_x
+    assert GAME_BOARD_LAYOUT.origin_x + board_width <= RIGHT_PANEL_X
+    assert GAME_BOARD_LAYOUT.origin_y + board_height <= FRAME_HEIGHT
 
 
 class GeometryEngine:
@@ -215,7 +238,7 @@ class GeometryEngine:
 
 
 def test_board_input_geometry_remains_at_configured_origin_and_size() -> None:
-    layout = BoardLayout(cell_size=100, origin_x=0, origin_y=0)
+    layout = GAME_BOARD_LAYOUT
     captured_mapper: list[BoardMapper] = []
 
     def controller_factory(mapper, engine):
@@ -235,7 +258,17 @@ def test_board_input_geometry_remains_at_configured_origin_and_size() -> None:
     )
 
     mapper = captured_mapper[0]
-    assert mapper.pixel_to_cell(0, 0) == Position(0, 0)
-    assert mapper.pixel_to_cell(799, 799) == Position(7, 7)
-    assert mapper.pixel_to_cell(800, 799) is None
-    assert mapper.pixel_to_cell(20, 820) is None
+    assert mapper.layout is layout
+    board_width, board_height = layout.board_pixel_size(8, 8)
+    assert mapper.pixel_to_cell(layout.origin_x, layout.origin_y) == Position(0, 0)
+    assert mapper.pixel_to_cell(
+        layout.origin_x + board_width - 1,
+        layout.origin_y + board_height - 1,
+    ) == Position(7, 7)
+    assert mapper.pixel_to_cell(layout.origin_x - 1, layout.origin_y) is None
+    assert mapper.pixel_to_cell(
+        layout.origin_x + board_width,
+        layout.origin_y + board_height - 1,
+    ) is None
+    assert mapper.pixel_to_cell(LEFT_PANEL_X + 10, 100) is None
+    assert mapper.pixel_to_cell(RIGHT_PANEL_X + 10, 100) is None

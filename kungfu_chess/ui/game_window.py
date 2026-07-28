@@ -7,7 +7,7 @@ from typing import Protocol
 
 from ..engine.game_engine import GameEngine
 from ..game_config import GameConfig, load_game_config
-from ..input.board_mapper import DEFAULT_CELL_SIZE, BoardMapper
+from ..input.board_mapper import BoardMapper
 from ..input.controller import Controller
 from ..io.board_parser import parse_board
 from ..realtime.real_time_arbiter import RealTimeArbiter
@@ -27,6 +27,8 @@ _PACKAGE_ROOT = _UI_ROOT.parent
 _ASSETS_ROOT = _UI_ROOT / "assets"
 _STANDARD_BOARD_PATH = _PACKAGE_ROOT / "resources" / "boards" / "standard_board.txt"
 _GAME_CONFIG_PATH = _PACKAGE_ROOT / "resources" / "game_config.json"
+GAME_BOARD_LAYOUT = BoardLayout(cell_size=72, origin_x=260, origin_y=30)
+SPRITE_SIZE = round(GAME_BOARD_LAYOUT.cell_size * 0.64)
 
 
 class WindowOperations(Protocol):
@@ -55,7 +57,8 @@ def _build_standard_engine(config: GameConfig) -> GameEngine:
 
 
 def _build_renderer(layout: BoardLayout) -> GameRenderer:
-    sprite_loader = SpriteLoader(_ASSETS_ROOT / "pieces2")
+    sprite_size = round(layout.cell_size * 0.64)
+    sprite_loader = SpriteLoader(_ASSETS_ROOT / "pieces2", sprite_size=sprite_size)
     board_renderer = BoardRenderer(_ASSETS_ROOT / "board.png", sprite_loader, layout)
     return GameRenderer(board_renderer)
 
@@ -117,13 +120,7 @@ def run_game(
 ) -> None:
     """Wire input geometry to an existing game and run its persistent window."""
     snapshot = engine.snapshot()
-    mapper = BoardMapper(
-        snapshot.width,
-        snapshot.height,
-        cell_size=layout.cell_size,
-        origin_x=layout.origin_x,
-        origin_y=layout.origin_y,
-    )
+    mapper = BoardMapper(snapshot.width, snapshot.height, layout)
     controller = controller_factory(mapper, engine)
     loop(engine, renderer, controller, presentation)
 
@@ -132,7 +129,7 @@ def main() -> None:
     """Run the persistent real-time window until the user closes it."""
     config = load_game_config(_GAME_CONFIG_PATH)
     engine = _build_standard_engine(config)
-    layout = BoardLayout(cell_size=DEFAULT_CELL_SIZE)
+    layout = GAME_BOARD_LAYOUT
     renderer = _build_renderer(layout)
     presentation = GamePresentation(
         piece_values=config.piece_values,
