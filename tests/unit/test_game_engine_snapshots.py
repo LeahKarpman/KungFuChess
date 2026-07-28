@@ -1,4 +1,4 @@
-import unittest
+import pytest
 
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.model.piece import Piece
@@ -8,7 +8,7 @@ from kungfu_chess.rules.rule_engine import RuleEngine
 from tests.unit.game_engine_test_support import make_engine as _engine
 
 
-class TestGameEngineSnapshots(unittest.TestCase):
+class TestGameEngineSnapshots:
     """Verify snapshots use public board state and remain consistent and immutable."""
 
     def test_snapshot_reads_pieces_through_board_public_api(self) -> None:
@@ -39,8 +39,8 @@ class TestGameEngineSnapshots(unittest.TestCase):
 
         snapshot = engine.snapshot()
 
-        self.assertEqual(board.all_pieces_calls, 1)
-        self.assertEqual(snapshot.pieces[0].id, piece.id)
+        assert board.all_pieces_calls == 1
+        assert snapshot.pieces[0].id == piece.id
 
     def test_snapshot_reports_motion_lifecycle(self) -> None:
         engine, _ = _engine(["wR . ."])
@@ -54,24 +54,12 @@ class TestGameEngineSnapshots(unittest.TestCase):
         engine.wait(2000)
         arrived_snapshot = engine.snapshot()
 
-        self.assertEqual(
-            moving_snapshot.pieces[0].state,
-            "moving",
-        )
-        self.assertEqual(
-            moving_snapshot.pieces[0].cell,
-            Position(0, 0),
-        )
-        self.assertEqual(len(moving_snapshot.motions), 1)
-        self.assertEqual(
-            arrived_snapshot.pieces[0].state,
-            "long_rest",
-        )
-        self.assertEqual(
-            arrived_snapshot.pieces[0].cell,
-            Position(0, 2),
-        )
-        self.assertEqual(arrived_snapshot.motions, ())
+        assert moving_snapshot.pieces[0].state == "moving"
+        assert moving_snapshot.pieces[0].cell == Position(0, 0)
+        assert len(moving_snapshot.motions) == 1
+        assert arrived_snapshot.pieces[0].state == "long_rest"
+        assert arrived_snapshot.pieces[0].cell == Position(0, 2)
+        assert arrived_snapshot.motions == ()
 
     def test_snapshot_contains_each_piece_once_during_move_and_jump(
         self,
@@ -91,9 +79,9 @@ class TestGameEngineSnapshots(unittest.TestCase):
         piece_ids = [piece.id for piece in snapshot.pieces]
         motion_ids = {motion.piece_id for motion in snapshot.motions}
 
-        self.assertEqual(len(piece_ids), 3)
-        self.assertEqual(len(piece_ids), len(set(piece_ids)))
-        self.assertEqual(motion_ids, {"wR_0_0", "wK_1_1"})
+        assert len(piece_ids) == 3
+        assert len(piece_ids) == len(set(piece_ids))
+        assert motion_ids == {"wR_0_0", "wK_1_1"}
 
     def test_snapshot_exposes_current_segment_and_total_action_elapsed(self) -> None:
         engine, _ = _engine(["wR . . ."])
@@ -104,12 +92,12 @@ class TestGameEngineSnapshots(unittest.TestCase):
         piece = snapshot.pieces[0]
         motion = snapshot.motions[0]
 
-        self.assertEqual(piece.cell, Position(0, 1))
-        self.assertEqual(motion.source, Position(0, 1))
-        self.assertEqual(motion.destination, Position(0, 2))
-        self.assertEqual(motion.elapsed_ms, 500)
-        self.assertEqual(motion.duration_ms, 1000)
-        self.assertEqual(motion.action_elapsed_ms, 1500)
+        assert piece.cell == Position(0, 1)
+        assert motion.source == Position(0, 1)
+        assert motion.destination == Position(0, 2)
+        assert motion.elapsed_ms == 500
+        assert motion.duration_ms == 1000
+        assert motion.action_elapsed_ms == 1500
 
     def test_knight_snapshot_exposes_one_direct_visual_segment(self) -> None:
         engine, board = _engine(
@@ -128,26 +116,26 @@ class TestGameEngineSnapshots(unittest.TestCase):
         snapshot = engine.snapshot()
         motion = snapshot.motions[0]
 
-        self.assertIs(board.get_piece(Position(0, 0)), knight)
-        self.assertIs(board.get_piece(Position(1, 0)), friendly_blocker)
-        self.assertIs(board.get_piece(Position(2, 0)), enemy_blocker)
-        self.assertEqual(motion.source, Position(0, 0))
-        self.assertEqual(motion.destination, Position(2, 1))
-        self.assertEqual(motion.elapsed_ms, 1500)
-        self.assertEqual(motion.duration_ms, 3000)
+        assert board.get_piece(Position(0, 0)) is knight
+        assert board.get_piece(Position(1, 0)) is friendly_blocker
+        assert board.get_piece(Position(2, 0)) is enemy_blocker
+        assert motion.source == Position(0, 0)
+        assert motion.destination == Position(2, 1)
+        assert motion.elapsed_ms == 1500
+        assert motion.duration_ms == 3000
 
         engine.wait(1500)
 
-        self.assertIs(board.get_piece(Position(2, 1)), knight)
-        self.assertIs(board.get_piece(Position(1, 0)), friendly_blocker)
-        self.assertIs(board.get_piece(Position(2, 0)), enemy_blocker)
+        assert board.get_piece(Position(2, 1)) is knight
+        assert board.get_piece(Position(1, 0)) is friendly_blocker
+        assert board.get_piece(Position(2, 0)) is enemy_blocker
 
     def test_snapshot_and_nested_piece_views_are_immutable(self) -> None:
         engine, _ = _engine(["wR . ."])
         snapshot = engine.snapshot()
 
-        with self.assertRaises(AttributeError):
+        with pytest.raises(AttributeError):
             setattr(snapshot, "game_over", True)  # noqa: B010
 
-        with self.assertRaises(AttributeError):
+        with pytest.raises(AttributeError):
             setattr(snapshot.pieces[0], "state", "captured")  # noqa: B010
