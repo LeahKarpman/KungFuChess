@@ -8,42 +8,57 @@ Repository state:
 
 - `main` is aligned with `origin/main`.
 - PR #29 merged the complete testing-standard change set into `main`.
-- Current verified implementation commit: `d647d7470036a1b1aaa831a65d00ba5c365ae677`.
-- Verified implementation subject: `Merge pull request #29 from LeahKarpman/test/complete-testing-compliance`.
-- Verified implementation commit date: 2026-07-29 14:30:00 +0300.
+- Current verified implementation commit: `6d72bc7eaede5e528771fe3bd044573d2243ef62`.
+- Verified implementation subject: `feat(ui): display default player names`.
+- Verified implementation commit date: 2026-07-29 15:17:36 +0300.
 - The official root-level project documents are tracked in Git.
 - Obsolete `CTD26` ignore and Pyright-exclusion entries have been removed after the local reference directory was deleted.
 - The testing work uses three focused commits: native-Pytest migration,
   reproducible coverage workflow, and meaningful remaining-path coverage.
 - Generated `.coverage` data and `htmlcov/` output remain ignored and untracked.
 
-The current repository includes a compact graphical dashboard with side scores and per-color move panels.
+The current repository includes a compact graphical dashboard with
+application-provided default player names, side scores, and per-color move
+panels.
 
 The next confirmed work is focused rather than a general UI rewrite:
 
-- Add the application-provided default names `White Player` and `Black Player` without introducing a name-entry workflow.
 - Perform a focused Observer design review and introduce the pattern only if a genuine one-to-many notification relationship currently requires it.
 
 ## 2. Current Verification
 
-Complete suite and branch coverage, reverified on 2026-07-29 on `main` at
-commit `d647d7470036a1b1aaa831a65d00ba5c365ae677`:
+Focused UI tests, reverified on 2026-07-29 on `main` at commit
+`6d72bc7eaede5e528771fe3bd044573d2243ef62`:
 
 ```text
-python -m pytest -q
+python -m pytest -q -p no:cacheprovider tests/unit/test_game_presentation.py tests/unit/test_game_hud.py tests/unit/test_compact_dashboard.py tests/unit/test_game_window.py tests/unit/test_game_events.py
 ```
 
 Result:
 
-- Collected: 687
-- Passed: 687
+- Collected: 97
+- Passed: 97
 - Failed: 0
 - Errors: 0
-- Duration: 7.76 seconds
+- Duration: 0.69 seconds
+
+Complete suite:
+
+```text
+python -m pytest -q -p no:cacheprovider
+```
+
+Result:
+
+- Collected: 688
+- Passed: 688
+- Failed: 0
+- Errors: 0
+- Duration: 4.90 seconds
 
 ```text
 python -m coverage erase
-python -m coverage run -m pytest
+python -m coverage run -m pytest -p no:cacheprovider
 python -m coverage report -m
 python -m coverage html
 ```
@@ -51,7 +66,7 @@ python -m coverage html
 Current branch-aware result:
 
 - Total coverage: 100.00%
-- Statements: 1588
+- Statements: 1596
 - Missed statements: 0
 - Branches: 452
 - Partially covered branches: 0
@@ -79,6 +94,8 @@ The archive verifies:
 - Sprite-state animation through `Img`
 - Capture-value scoring
 - Separate White and Black move panels
+- Application-provided `White Player` and `Black Player` names in their
+  corresponding side panels
 - A compact board-centered dashboard
 
 Current rest configuration:
@@ -107,10 +124,22 @@ The official UI presentation lists a moves log, capture-value score, player name
 - Direct `cv2` use remains confined to `kungfu_chess/ui/img.py`.
 - Score is derived from capture events and configured piece values.
 - White and Black have independent move panels.
+- The application supplies `White Player` and `Black Player`; `GamePresentation`
+  exposes the names as presentation state and `GameRenderer` draws each name
+  in its corresponding panel through `Img`.
 - The dashboard composes the board and side panels into one frame.
 - Animation assets are loaded from state-specific sprite folders and JSON definitions.
 
 ### Recently Completed
+
+The player-name display was completed in commit `6d72bc7`:
+
+- The graphical composition root supplies the exact default player names.
+- No user input, account, persistence, or setup workflow was introduced.
+- Board geometry, input mapping, animations, scoring, move history, and gameplay
+  behavior remain unchanged.
+- Native-Pytest coverage proves both names are supplied as presentation state
+  and drawn in the correct side panels.
 
 The moves-log completion work was merged in PR #24:
 
@@ -122,7 +151,6 @@ The moves-log completion work was merged in PR #24:
 
 ### Not Yet Implemented or Not Yet Defined
 
-- Player names are not represented or displayed. The confirmed defaults are `White Player` and `Black Player`; no name-entry workflow is required.
 - The `Observer` requirement is now clarified as the Observer design pattern, to be used only at genuine one-to-many notification boundaries.
 - No explicit observer subscription and notification contract was found in the current production code. The engine currently exposes a pull-based `consume_events()` queue, and `GameWindow` forwards consumed events to one `GamePresentation` instance. This is event-driven collaboration, but it is not by itself a complete Observer-pattern implementation.
 - A focused design review must identify where multiple independent consumers actually require notification before introducing an observer abstraction. The requirement does not call for spectator mode or a global event bus.
@@ -139,7 +167,7 @@ Current audit:
 - Test files: 33
 - Files using `unittest` structures: 0
 - `unittest.TestCase` classes: 0
-- Collected native-Pytest tests: 687
+- Collected native-Pytest tests: 688
 
 Status:
 
@@ -207,10 +235,11 @@ Recently completed correctness work:
 5. Complete native-Pytest migration with no monkey-patching.
 6. Reproducible whole-package branch coverage and HTML reporting.
 7. Behavior-focused coverage of every production statement and branch.
+8. Application-provided default player names displayed in the corresponding
+   dashboard panels.
 
 Remaining official UI work:
 
-- Add `White Player` and `Black Player` as application-provided default player names without user input.
 - Apply the Observer design pattern at appropriate one-to-many notification boundaries, after a focused design review identifies a concrete need.
 
 Remaining quality work:
@@ -237,7 +266,7 @@ Their intended location is the repository root.
 
 The deleted local `CTD26/` reference directory was not tracked. Its obsolete entries were removed from `.gitignore` and `pyrightconfig.json`.
 
-This status reconciliation changes documentation only. The source-and-test changes are contained in the merged PR #29 change set.
+The player-name implementation and tests are contained in commit `6d72bc7`.
 
 ## 9. Latest Documentation Update
 
@@ -248,12 +277,9 @@ Files updated:
 
 Sources reconciled:
 
-- The complete Stage 1 native-Pytest migration
-- The committed Stage 2 coverage workflow
-- The 2026-07-29 Stage 3 complete-suite and coverage run
-- Merge of PR #29 into `main`
-- Complete-suite and coverage re-verification on merge commit `d647d747`
-- Static audits for legacy `unittest` structures and prohibited monkey-patching
+- Player-name implementation commit `6d72bc7`
+- Focused player-name UI tests
+- Complete-suite and branch-coverage verification on commit `6d72bc7`
 
 Current verified branch:
 
@@ -261,4 +287,4 @@ Current verified branch:
 
 Current verified commit:
 
-`d647d747 Merge pull request #29 from LeahKarpman/test/complete-testing-compliance`
+`6d72bc7 feat(ui): display default player names`

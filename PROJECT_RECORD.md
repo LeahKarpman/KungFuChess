@@ -1193,3 +1193,110 @@ The earlier status describing `test/complete-testing-compliance` as awaiting pub
 ### Source Code Updated
 
 - None
+
+## 2026-07-29 — Default Player Names Displayed in Dashboard
+
+### Source
+
+Explicit user request to complete the final missing non-Observer UI requirement.
+
+### Requirement
+
+- The application supplies the exact defaults `White Player` and `Black Player`.
+- Each name is displayed clearly in its corresponding White or Black side panel.
+- No player-name input, accounts, persistence, or setup screen is introduced.
+- Score, moves history, board geometry, input mapping, animations, and gameplay
+  behavior remain unchanged.
+- `GamePresentation` owns presentation state and `GameRenderer` owns drawing.
+- All displayed text continues to use `Img`.
+- Observer is outside this focused task.
+
+### Implementation
+
+- Commit: `6d72bc7eaede5e528771fe3bd044573d2243ef62`
+- Subject: `feat(ui): display default player names`
+- `kungfu_chess/ui/game_window.py` supplies the two application defaults.
+- `GamePresentation` stores the supplied names and includes them in its immutable
+  snapshot.
+- `GameRenderer` draws each supplied name in the matching side panel through
+  `Img.put_text`.
+- Existing board and input geometry are unchanged, and the panel spacing retains
+  the existing number of visible move rows.
+- No Observer implementation or name-entry workflow was added.
+
+### Verification
+
+Focused command:
+
+```text
+python -m pytest -q -p no:cacheprovider tests/unit/test_game_presentation.py tests/unit/test_game_hud.py tests/unit/test_compact_dashboard.py tests/unit/test_game_window.py tests/unit/test_game_events.py
+```
+
+Result:
+
+- Collected: 97
+- Passed: 97
+- Failed: 0
+- Errors: 0
+- Duration: 0.69 seconds
+
+Complete-suite command:
+
+```text
+python -m pytest -q -p no:cacheprovider
+```
+
+Result:
+
+- Collected: 688
+- Passed: 688
+- Failed: 0
+- Errors: 0
+- Duration: 4.90 seconds
+
+Coverage commands:
+
+```text
+python -m coverage erase
+python -m coverage run -m pytest -p no:cacheprovider
+python -m coverage report -m
+python -m coverage html
+```
+
+Result:
+
+- Collected: 688
+- Passed: 688
+- Failed: 0
+- Errors: 0
+- Duration: 6.73 seconds
+- Statements: 1596
+- Missed statements: 0
+- Branches: 452
+- Partially covered branches: 0
+- Total coverage: 100.00%
+- HTML report: generated successfully at `htmlcov/index.html`
+
+Formatting command:
+
+```text
+git diff --check
+```
+
+Result:
+
+- Exit code: 0
+- No whitespace errors
+
+### Files Updated
+
+- `kungfu_chess/ui/game_window.py`
+- `kungfu_chess/ui/presentation.py`
+- `kungfu_chess/ui/renderer.py`
+- `tests/unit/test_compact_dashboard.py`
+- `tests/unit/test_game_events.py`
+- `tests/unit/test_game_hud.py`
+- `tests/unit/test_game_presentation.py`
+- `tests/unit/test_game_window.py`
+- `PROJECT_STATUS.md`
+- `PROJECT_RECORD.md`
