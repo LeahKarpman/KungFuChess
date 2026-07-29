@@ -1300,3 +1300,66 @@ Result:
 - `tests/unit/test_game_window.py`
 - `PROJECT_STATUS.md`
 - `PROJECT_RECORD.md`
+
+## 2026-07-29 — Sandboxed Pytest Temporary Root Isolated
+
+### Sources
+
+- User-provided complete Pytest failure output
+- Current Windows ACL and process-identity evidence
+- Explicit user instruction to apply the recommended repair and publish it
+
+### Diagnosis
+
+- The reported result was 667 passed and 21 setup errors.
+- Every error was the same `PermissionError: [WinError 5]` while Pytest's
+  `tmp_path` fixture attempted to scan
+  `C:\Users\02\AppData\Local\Temp\pytest-of-02`.
+- The affected parametrized cases were in `tests/unit/test_game_config.py` and
+  `tests/unit/test_score_config.py`.
+- The sandbox process ran under a Codex sandbox Windows security identity while
+  Python's `getpass.getuser()` still returned `02`.
+- Pytest therefore created the human user's default-named temporary root with
+  sandbox-owner-only access.
+- The tests and production code were not responsible for the errors.
+
+### Repair
+
+- Removed only the generated inaccessible `pytest-of-02` directory after
+  verifying its exact path and contents.
+- Required sandboxed coding-agent Pytest runs to use a unique agent-owned
+  `--basetemp` path.
+- Added README troubleshooting guidance for the corresponding Windows error.
+- Preserved the native Pytest `tmp_path` fixtures unchanged.
+- Workflow commit: `4ba5094 fix(test): isolate sandbox pytest temp roots`.
+
+### Verification
+
+Command:
+
+```powershell
+$agentPytestTemp = Join-Path ([System.IO.Path]::GetTempPath()) "kungfu-chess-codex-$PID"
+python -m pytest -q -p no:cacheprovider --basetemp $agentPytestTemp
+```
+
+Result:
+
+- Collected: 688
+- Passed: 688
+- Failed: 0
+- Errors: 0
+- Duration: 6.04 seconds
+- The verified agent-owned temporary directory was removed after the run.
+- Git diff whitespace check passed.
+
+### Files Updated
+
+- `AGENTS.md`
+- `PROJECT_CONTEXT.md`
+- `README.md`
+- `PROJECT_STATUS.md`
+- `PROJECT_RECORD.md`
+
+### Source Code and Tests Updated
+
+- None

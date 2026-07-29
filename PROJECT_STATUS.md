@@ -7,6 +7,8 @@ Last updated: 2026-07-29
 Repository state:
 
 - `main` is aligned with `origin/main`.
+- Commit `4ba5094` prevents sandboxed coding-agent Pytest runs from reusing the
+  human user's default temporary root.
 - PR #29 merged the complete testing-standard change set into `main`.
 - Current verified implementation commit: `6d72bc7eaede5e528771fe3bd044573d2243ef62`.
 - Verified implementation subject: `feat(ui): display default player names`.
@@ -26,6 +28,23 @@ The next confirmed work is focused rather than a general UI rewrite:
 - Perform a focused Observer design review and introduce the pattern only if a genuine one-to-many notification relationship currently requires it.
 
 ## 2. Current Verification
+
+Sandboxed-agent test execution, verified on 2026-07-29 on `main` at commit
+`4ba5094`:
+
+```powershell
+$agentPytestTemp = Join-Path ([System.IO.Path]::GetTempPath()) "kungfu-chess-codex-$PID"
+python -m pytest -q -p no:cacheprovider --basetemp $agentPytestTemp
+```
+
+Result:
+
+- Collected: 688
+- Passed: 688
+- Failed: 0
+- Errors: 0
+- Duration: 6.04 seconds
+- The verified agent-owned base temporary directory was removed after the run.
 
 Focused UI tests, reverified on 2026-07-29 on `main` at commit
 `6d72bc7eaede5e528771fe3bd044573d2243ef62`:
@@ -237,6 +256,7 @@ Recently completed correctness work:
 7. Behavior-focused coverage of every production statement and branch.
 8. Application-provided default player names displayed in the corresponding
    dashboard panels.
+9. Sandboxed Pytest runs isolated from the human user's default temporary root.
 
 Remaining official UI work:
 
@@ -272,19 +292,23 @@ The player-name implementation and tests are contained in commit `6d72bc7`.
 
 Files updated:
 
+- `AGENTS.md`
+- `PROJECT_CONTEXT.md`
+- `README.md`
 - `PROJECT_STATUS.md`
 - `PROJECT_RECORD.md`
 
 Sources reconciled:
 
-- Player-name implementation commit `6d72bc7`
-- Focused player-name UI tests
-- Complete-suite and branch-coverage verification on commit `6d72bc7`
+- User-provided Pytest output showing 667 passed and 21 setup errors
+- Windows ACL evidence for `%TEMP%\pytest-of-02`
+- Isolated-base-temp workflow commit `4ba5094`
+- Complete-suite verification using a unique agent-owned `--basetemp`
 
 Current verified branch:
 
 `main`
 
-Current verified commit:
+Current verified testing-workflow commit:
 
-`6d72bc7 feat(ui): display default player names`
+`4ba5094 fix(test): isolate sandbox pytest temp roots`
