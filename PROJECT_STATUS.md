@@ -6,8 +6,11 @@ Last updated: 2026-07-29
 
 Repository state:
 
-- The complete testing-standard change set is verified on
-  `test/complete-testing-compliance` for publication to `main`.
+- `main` is aligned with `origin/main`.
+- PR #29 merged the complete testing-standard change set into `main`.
+- Current verified implementation commit: `d647d7470036a1b1aaa831a65d00ba5c365ae677`.
+- Verified implementation subject: `Merge pull request #29 from LeahKarpman/test/complete-testing-compliance`.
+- Verified implementation commit date: 2026-07-29 14:30:00 +0300.
 - The official root-level project documents are tracked in Git.
 - Obsolete `CTD26` ignore and Pyright-exclusion entries have been removed after the local reference directory was deleted.
 - The testing work uses three focused commits: native-Pytest migration,
@@ -23,8 +26,8 @@ The next confirmed work is focused rather than a general UI rewrite:
 
 ## 2. Current Verification
 
-Complete suite, verified on 2026-07-29 on
-`test/complete-testing-compliance` after the Stage 3 source-and-test changes:
+Complete suite and branch coverage, reverified on 2026-07-29 on `main` at
+commit `d647d7470036a1b1aaa831a65d00ba5c365ae677`:
 
 ```text
 python -m pytest -q
@@ -36,7 +39,7 @@ Result:
 - Passed: 687
 - Failed: 0
 - Errors: 0
-- Duration: 6.69 seconds
+- Duration: 7.76 seconds
 
 ```text
 python -m coverage erase
@@ -234,7 +237,7 @@ Their intended location is the repository root.
 
 The deleted local `CTD26/` reference directory was not tracked. Its obsolete entries were removed from `.gitignore` and `pyrightconfig.json`.
 
-No source or test code was changed during this documentation and configuration update.
+This status reconciliation changes documentation only. The source-and-test changes are contained in the merged PR #29 change set.
 
 ## 9. Latest Documentation Update
 
@@ -248,8 +251,14 @@ Sources reconciled:
 - The complete Stage 1 native-Pytest migration
 - The committed Stage 2 coverage workflow
 - The 2026-07-29 Stage 3 complete-suite and coverage run
+- Merge of PR #29 into `main`
+- Complete-suite and coverage re-verification on merge commit `d647d747`
 - Static audits for legacy `unittest` structures and prohibited monkey-patching
 
-Verified change-set branch:
+Current verified branch:
 
-`test/complete-testing-compliance`
+`main`
+
+Current verified commit:
+
+`d647d747 Merge pull request #29 from LeahKarpman/test/complete-testing-compliance`

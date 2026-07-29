@@ -1131,3 +1131,65 @@ Latest explicit user decision.
   layout/config inputs for safe assembly and testing.
 - `kungfu_chess/ui/img.py`: explicit validation for unsupported pixel shapes
   before conversion and drawing.
+
+## 2026-07-29 — Testing Compliance Merged and Reverified on Main
+
+### Sources
+
+- Current Git history
+- Merge commit `d647d7470036a1b1aaa831a65d00ba5c365ae677`
+- Complete Pytest and branch-coverage run on `main`
+- Static audit of legacy `unittest` structures and prohibited patching
+
+### Current Repository Evidence
+
+- Branch: `main`
+- Upstream: `origin/main`
+- Ahead/behind: `0/0`
+- Commit: `d647d7470036a1b1aaa831a65d00ba5c365ae677`
+- Subject: `Merge pull request #29 from LeahKarpman/test/complete-testing-compliance`
+- Commit date: 2026-07-29 14:30:00 +0300
+
+### Main-Branch Verification
+
+Commands:
+
+```text
+$env:PYTHONDONTWRITEBYTECODE='1'
+python -m coverage erase
+python -m coverage run -m pytest -q -p no:cacheprovider
+python -m coverage report -m
+```
+
+Result:
+
+- Collected: 687
+- Passed: 687
+- Failed: 0
+- Errors: 0
+- Duration: 7.76 seconds
+- Statements: 1588
+- Missed statements: 0
+- Branches: 452
+- Partially covered branches: 0
+- Total coverage: 100.00%
+
+### Compliance Audit
+
+- Test files: 33
+- Files using `unittest` structures: 0
+- `unittest.TestCase` classes: 0
+- Prohibited monkey-patching occurrences: 0
+
+### Superseded Status
+
+The earlier status describing `test/complete-testing-compliance` as awaiting publication is superseded. PR #29 is merged and the same testing-standard compliance is verified on `main`.
+
+### Files Updated
+
+- `PROJECT_STATUS.md`
+- `PROJECT_RECORD.md`
+
+### Source Code Updated
+
+- None
