@@ -34,9 +34,10 @@ LEFT_PANEL_X = 20
 RIGHT_PANEL_X = 856
 PANEL_PADDING = 16
 PANEL_HEADING_BASELINE = 42
-PANEL_SCORE_BASELINE = 80
-PANEL_MOVES_BASELINE = 132
-PANEL_FIRST_ENTRY_BASELINE = 174
+PANEL_NAME_BASELINE = 74
+PANEL_SCORE_BASELINE = 106
+PANEL_MOVES_BASELINE = 146
+PANEL_FIRST_ENTRY_BASELINE = 184
 PANEL_ENTRY_LINE_HEIGHT = 32
 PANEL_BOTTOM_PADDING = 20
 HUD_BACKGROUND_COLOR = (28, 31, 36, 255)
@@ -322,6 +323,7 @@ class GameRenderer:
             canvas,
             LEFT_PANEL_X,
             "Black",
+            presentation.black_name,
             presentation.black_score,
             presentation.black_actions,
         )
@@ -329,6 +331,7 @@ class GameRenderer:
             canvas,
             RIGHT_PANEL_X,
             "White",
+            presentation.white_name,
             presentation.white_score,
             presentation.white_actions,
         )
@@ -353,6 +356,7 @@ class GameRenderer:
         canvas: Img,
         panel_x: int,
         color_name: str,
+        player_name: str,
         score: int,
         actions: tuple[MoveLogEntry, ...],
     ) -> None:
@@ -364,6 +368,14 @@ class GameRenderer:
             HUD_HEADING_FONT_SIZE,
             color=HUD_HEADING_COLOR,
             thickness=2,
+        )
+        canvas.put_text(
+            player_name,
+            text_x,
+            PANEL_Y + PANEL_NAME_BASELINE,
+            HUD_FONT_SIZE,
+            color=HUD_TEXT_COLOR,
+            thickness=1,
         )
         canvas.put_text(
             f"Score: {score}",

@@ -67,6 +67,8 @@ def test_intermediate_king_capture_completes_and_logs_winning_move() -> None:
     presentation = GamePresentation(
         {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0},
         board_height=2,
+        white_name="White Player",
+        black_name="Black Player",
     )
     presentation.apply(events)
 

@@ -1,4 +1,4 @@
-"""Event-driven presentation state for scores and completed action history."""
+"""Event-driven presentation state for player names, scores, and action history."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,8 +28,10 @@ class MoveLogEntry:
 
 @dataclass(frozen=True)
 class GamePresentationSnapshot:
-    """Immutable score and complete action history consumed by the HUD renderer."""
+    """Immutable player details and action history consumed by the HUD renderer."""
 
+    white_name: str
+    black_name: str
     white_score: int
     black_score: int
     white_actions: tuple[MoveLogEntry, ...]
@@ -37,13 +39,21 @@ class GamePresentationSnapshot:
 
 
 class GamePresentation:
-    """Project engine events into display-only score and full move-log state."""
+    """Hold player names and project engine events into display-only state."""
 
-    def __init__(self, piece_values: Mapping[str, int], board_height: int) -> None:
+    def __init__(
+        self,
+        piece_values: Mapping[str, int],
+        board_height: int,
+        white_name: str,
+        black_name: str,
+    ) -> None:
         if board_height <= 0:
             raise ValueError("board_height must be positive")
         self._piece_values = dict(piece_values)
         self._board_height = board_height
+        self._white_name = white_name
+        self._black_name = black_name
         self._scores = {"w": 0, "b": 0}
         self._actions: dict[str, list[MoveLogEntry]] = {"w": [], "b": []}
         self._capturing_piece_ids: set[str] = set()
@@ -66,6 +76,8 @@ class GamePresentation:
     def snapshot(self) -> GamePresentationSnapshot:
         """Return an immutable presentation snapshot for the next frame."""
         return GamePresentationSnapshot(
+            white_name=self._white_name,
+            black_name=self._black_name,
             white_score=self._scores["w"],
             black_score=self._scores["b"],
             white_actions=tuple(self._actions["w"]),

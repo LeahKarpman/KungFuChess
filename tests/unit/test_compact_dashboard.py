@@ -129,7 +129,7 @@ def test_board_is_drawn_at_layout_origin_inside_the_compact_frame() -> None:
     frame = renderer.render(
         _snapshot(),
         None,
-        GamePresentationSnapshot(0, 0, (), ()),
+        GamePresentationSnapshot("White Player", "Black Player", 0, 0, (), ()),
     )
     origin_x = GAME_BOARD_LAYOUT.origin_x
     origin_y = GAME_BOARD_LAYOUT.origin_y
@@ -271,7 +271,14 @@ def test_renderer_shows_newest_fitting_moves_in_chronological_order() -> None:
     frame = renderer.render(
         object(),
         None,
-        GamePresentationSnapshot(0, 0, history, ()),
+        GamePresentationSnapshot(
+            "White Player",
+            "Black Player",
+            0,
+            0,
+            history,
+            (),
+        ),
     )
 
     rendered_moves = [

@@ -193,6 +193,8 @@ def test_final_frame_contains_centered_board_and_side_scores_and_logs() -> None:
     renderer = GameRenderer(board_renderer, image_factory=image_factory)
     snapshot = object()
     presentation = GamePresentationSnapshot(
+        white_name="White Player",
+        black_name="Black Player",
         white_score=5,
         black_score=3,
         white_actions=(MoveLogEntry("wR", "w", "R a1xa8"),),
@@ -206,9 +208,11 @@ def test_final_frame_contains_centered_board_and_side_scores_and_logs() -> None:
     assert board_renderer.calls == [(frame, snapshot, Position(0, 0))]
     text_by_value = {call[0]: call for call in frame.text_calls}
     assert text_by_value["BLACK"][1] == LEFT_PANEL_X + 16
+    assert text_by_value["Black Player"][1] == LEFT_PANEL_X + 16
     assert text_by_value["Score: 3"][1] == LEFT_PANEL_X + 16
     assert text_by_value["N e4 (jump)"][1] == LEFT_PANEL_X + 16
     assert text_by_value["WHITE"][1] == RIGHT_PANEL_X + 16
+    assert text_by_value["White Player"][1] == RIGHT_PANEL_X + 16
     assert text_by_value["Score: 5"][1] == RIGHT_PANEL_X + 16
     assert text_by_value["R a1xa8"][1] == RIGHT_PANEL_X + 16
 

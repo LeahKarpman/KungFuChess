@@ -17,10 +17,17 @@ from kungfu_chess.ui.presentation import (
 )
 
 PIECE_VALUES = {"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0}
+WHITE_NAME = "White Player"
+BLACK_NAME = "Black Player"
 
 
 def _presentation() -> GamePresentation:
-    return GamePresentation(PIECE_VALUES, board_height=8)
+    return GamePresentation(
+        PIECE_VALUES,
+        board_height=8,
+        white_name=WHITE_NAME,
+        black_name=BLACK_NAME,
+    )
 
 
 def _capture(
@@ -60,7 +67,19 @@ def _move(
 
 def test_non_positive_board_height_is_rejected() -> None:
     with pytest.raises(ValueError, match="board_height"):
-        GamePresentation(PIECE_VALUES, board_height=0)
+        GamePresentation(
+            PIECE_VALUES,
+            board_height=0,
+            white_name=WHITE_NAME,
+            black_name=BLACK_NAME,
+        )
+
+
+def test_supplied_player_names_are_exposed_as_presentation_state() -> None:
+    snapshot = _presentation().snapshot()
+
+    assert snapshot.white_name == "White Player"
+    assert snapshot.black_name == "Black Player"
 
 
 def test_scores_start_at_zero() -> None:

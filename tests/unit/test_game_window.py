@@ -657,7 +657,12 @@ class TestMainComposition:
             ("renderer", layout),
             (
                 "presentation",
-                {"piece_values": config.piece_values, "board_height": 6},
+                {
+                    "piece_values": config.piece_values,
+                    "board_height": 6,
+                    "white_name": "White Player",
+                    "black_name": "Black Player",
+                },
             ),
             ("run", engine, renderer, layout, presentation),
         ]
@@ -701,7 +706,14 @@ class TestMainComposition:
         sample_y = layout.origin_y + 3
         assert mapper.pixel_to_cell(sample_x, sample_y) == Position(0, 0)
 
-        presentation = GamePresentationSnapshot(0, 0, (), ())
+        presentation = GamePresentationSnapshot(
+            "White Player",
+            "Black Player",
+            0,
+            0,
+            (),
+            (),
+        )
         baseline = renderer.render(snapshot, None, presentation)
         selected = renderer.render(snapshot, Position(0, 0), presentation)
         assert not (baseline.pixels[sample_y, sample_x] == selected.pixels[sample_y, sample_x]).all()

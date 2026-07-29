@@ -19,6 +19,8 @@ from .renderer import BoardRenderer, GameRenderer
 from .sprite_loader import SpriteLoader
 
 WINDOW_TITLE = "Kung-Fu Chess"
+DEFAULT_WHITE_PLAYER_NAME = "White Player"
+DEFAULT_BLACK_PLAYER_NAME = "Black Player"
 POLL_DELAY_MS = 30
 _EXIT_KEYS = frozenset({27, ord("q"), ord("Q")})  # Escape, q, Q
 
@@ -144,5 +146,7 @@ def main(
     presentation = presentation_factory(
         piece_values=config.piece_values,
         board_height=engine.snapshot().height,
+        white_name=DEFAULT_WHITE_PLAYER_NAME,
+        black_name=DEFAULT_BLACK_PLAYER_NAME,
     )
     game_runner(engine, renderer, layout, presentation)
