@@ -571,6 +571,12 @@ After each meaningful change:
 6. Record the measured coverage when a coverage run was performed.
 7. Do not claim full success when the complete suite was not run.
 
+Sandboxed coding-agent runs must provide Pytest with a unique agent-owned
+`--basetemp` directory. They must not use Pytest's default per-user temporary
+root, because a sandbox can have a different Windows security identity while
+still reporting the human user's name. Human developer runs may continue to use
+the standard documented command.
+
 Passing tests and high coverage do not by themselves prove that the architecture is correct.
 
 ## 11. Git and Environment Constraints

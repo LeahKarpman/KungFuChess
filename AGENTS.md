@@ -151,6 +151,21 @@ For meaningful code changes:
 3. Measure coverage when the change is significant or the task specifically concerns coverage.
 4. Record exact commands and results.
 
+For Pytest runs executed by a sandboxed coding agent:
+
+- Always pass `--basetemp` with a unique agent-owned directory.
+- Do not use or create Pytest's default per-user temporary root, because the
+  sandbox security identity may differ from the human user's identity even when
+  both environments report the same username.
+- On Windows PowerShell, a suitable process-specific setup is:
+
+  ```powershell
+  $agentPytestTemp = Join-Path ([System.IO.Path]::GetTempPath()) "kungfu-chess-codex-$PID"
+  python -m pytest -q -p no:cacheprovider --basetemp $agentPytestTemp
+  ```
+
+- Remove only that verified agent-owned temporary directory after the run.
+
 Aim strongly for 100% meaningful unit-test coverage, but do not add low-value tests merely to increase a percentage. No hard numeric coverage gate is currently defined.
 
 Do not declare Ruff or Pyright mandatory completion checks until the repository provides an agreed reproducible workflow for them.

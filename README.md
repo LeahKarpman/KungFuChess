@@ -79,6 +79,12 @@ Run the complete unit and integration suite from the repository root:
 python -m pytest -q
 ```
 
+If Pytest reports `PermissionError: [WinError 5]` for a path such as
+`%TEMP%\pytest-of-<user>`, an earlier sandboxed process created that temporary
+root with a different Windows owner. Remove only that generated Pytest
+directory, then rerun the command. Sandboxed automation should prevent the
+conflict by supplying a unique process-specific `--basetemp` path.
+
 ## Measuring Coverage
 
 Run the branch-aware whole-project coverage workflow from the repository root:
