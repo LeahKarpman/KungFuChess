@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import unittest
 from io import StringIO
+
+import pytest
 
 from kungfu_chess.texttests.script_runner import run
 
 
-class TestTextScripts(unittest.TestCase):
+class TestTextScripts:
     def _run(self, lines: list[str]) -> str:
         output = StringIO()
         run(lines, output=output)
@@ -15,7 +16,7 @@ class TestTextScripts(unittest.TestCase):
     # ── Iteration 1 ──────────────────────────────────────────────────────────
     def test_board_then_print(self):
         out = self._run(["Board", "wK .", ". bK", "print board"])
-        self.assertEqual(out, "wK .\n. bK\n")
+        assert out == 'wK .\n. bK\n'
 
     # ── Iteration 5 ──────────────────────────────────────────────────────────
     def test_move_updates_board_at_first_cell_boundary(self):
@@ -30,7 +31,7 @@ class TestTextScripts(unittest.TestCase):
             "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, ". . .\n. wR .\n. . bK\n")
+        assert out == '. . .\n. wR .\n. . bK\n'
 
     def test_move_after_arrival_board_updated(self):
         lines = [
@@ -46,7 +47,7 @@ class TestTextScripts(unittest.TestCase):
             "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, ". . .\n. wR .\n. . bK\n. . .\n. . .\n. wR bK\n")
+        assert out == '. . .\n. wR .\n. . bK\n. . .\n. . .\n. wR bK\n'
 
     def test_second_move_while_motion_active_rejected(self):
         # A moving piece cannot be redirected before it arrives.
@@ -61,7 +62,7 @@ class TestTextScripts(unittest.TestCase):
             "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, ". . . wR\n. . . .\n")
+        assert out == '. . . wR\n. . . .\n'
 
     def test_distinct_pieces_move_concurrently(self):
         lines = [
@@ -79,7 +80,7 @@ class TestTextScripts(unittest.TestCase):
 
         out = self._run(lines)
 
-        self.assertEqual(out, ". . wR\n. . .\n. . bR\n")
+        assert out == '. . wR\n. . .\n. . bR\n'
 
     def test_airborne_piece_captures_arriving_enemy(self):
         """Exercise the complete click route for an airborne capture."""
@@ -98,7 +99,7 @@ class TestTextScripts(unittest.TestCase):
 
         out = self._run(lines)
 
-        self.assertEqual(out, ". . .\nwK . .\n. . .\n")
+        assert out == '. . .\nwK . .\n. . .\n'
 
     def test_print_board_keeps_airborne_piece_visible_before_landing(self):
         """Render the pre-arrival state from the public game snapshot."""
@@ -112,7 +113,7 @@ class TestTextScripts(unittest.TestCase):
 
         out = self._run(lines)
 
-        self.assertEqual(out, ". wK .\n")
+        assert out == '. wK .\n'
 
     def test_malformed_commands_are_ignored_without_stopping_script(self):
         """Continue to valid commands after malformed text input."""
@@ -129,18 +130,20 @@ class TestTextScripts(unittest.TestCase):
 
         out = self._run(lines)
 
-        self.assertEqual(out, "wK .\n")
+        assert out == 'wK .\n'
 
-    def test_invalid_board_reports_canonical_error(self) -> None:
-        """Preserve parser errors through the complete text adapter path."""
-        cases = [
+    @pytest.mark.parametrize(
+        ("lines", "reason"),
+        [
             (["Board:", "wK xZ", ". .", "Commands:"], "UNKNOWN_TOKEN"),
             (["Board:", "wK . .", ". bK", "Commands:"], "ROW_WIDTH_MISMATCH"),
-        ]
-
-        for lines, reason in cases:
-            with self.subTest(reason=reason):
-                self.assertEqual(self._run(lines), f"ERROR {reason}\n")
+        ],
+    )
+    def test_invalid_board_reports_canonical_error(
+        self, lines: list[str], reason: str
+    ) -> None:
+        """Preserve parser errors through the complete text adapter path."""
+        assert self._run(lines) == f'ERROR {reason}\n'
 
     # ── Iteration 6 ──────────────────────────────────────────────────────────
     def test_capture_removes_enemy_on_arrival(self):
@@ -155,7 +158,7 @@ class TestTextScripts(unittest.TestCase):
             "print board",
         ]
         out = self._run(lines)
-        self.assertEqual(out, ". . wR\n. . wN\n. . .\n")
+        assert out == '. . wR\n. . wN\n. . .\n'
 
     def test_game_over_blocks_further_moves(self):
         lines = [
@@ -174,4 +177,4 @@ class TestTextScripts(unittest.TestCase):
         ]
         out = self._run(lines)
         # The board does not change after the king is captured.
-        self.assertEqual(out, ". . wR\n. . wN\n. . .\n. . wR\n. . wN\n. . .\n")
+        assert out == '. . wR\n. . wN\n. . .\n. . wR\n. . wN\n. . .\n'

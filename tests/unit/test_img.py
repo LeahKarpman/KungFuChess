@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import unittest
 from collections.abc import Callable
 
 import cv2
 import numpy as np
+import pytest
 
 from kungfu_chess.ui.img import Img
 
@@ -58,7 +58,7 @@ class RecordingCallback:
         self.calls.append((x, y))
 
 
-class TestImgCopy(unittest.TestCase):
+class TestImgCopy:
     def test_copy_creates_independent_pixel_data(self) -> None:
         original = Img()
         original.img = np.zeros((4, 4, 4), dtype=np.uint8)
@@ -66,16 +66,16 @@ class TestImgCopy(unittest.TestCase):
         duplicate = original.copy()
         duplicate.pixels[0, 0, 0] = 255
 
-        self.assertEqual(original.img[0, 0, 0], 0)
-        self.assertIsNot(duplicate.img, original.img)
+        assert original.img[0, 0, 0] == 0
+        assert duplicate.img is not original.img
 
     def test_copy_of_unloaded_image_stays_unloaded(self) -> None:
         original = Img()
         duplicate = original.copy()
-        self.assertIsNone(duplicate.img)
+        assert duplicate.img is None
 
 
-class TestImgWindowOperations(unittest.TestCase):
+class TestImgWindowOperations:
     """Verify the persistent-window API without opening a real OpenCV window."""
 
     def test_show_frame_calls_imshow_without_blocking_or_closing(self) -> None:
@@ -85,14 +85,14 @@ class TestImgWindowOperations(unittest.TestCase):
 
         img.show_frame("Kung-Fu Chess")
 
-        self.assertEqual(len(backend.calls), 1)
+        assert len(backend.calls) == 1
         method, window_name, pixels = backend.calls[0]
-        self.assertEqual((method, window_name), ("imshow", "Kung-Fu Chess"))
-        self.assertIs(pixels, img.img)
+        assert (method, window_name) == ('imshow', 'Kung-Fu Chess')
+        assert pixels is img.img
 
     def test_show_frame_requires_loaded_image(self) -> None:
         img = Img()
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             img.show_frame("Kung-Fu Chess")
 
     def test_poll_key_delegates_to_wait_key_with_delay(self) -> None:
@@ -101,26 +101,23 @@ class TestImgWindowOperations(unittest.TestCase):
 
         key = Img.poll_key(30, backend)
 
-        self.assertEqual(backend.calls, [("waitKey", 30)])
-        self.assertEqual(key, 27 & 0xFF)
+        assert backend.calls == [('waitKey', 30)]
+        assert key == 27 & 255
 
     def test_is_window_open_returns_true_for_visible_window(self) -> None:
         backend = FakeCvWindowBackend()
 
         is_open = Img.is_window_open("Kung-Fu Chess", backend)
 
-        self.assertEqual(
-            backend.calls,
-            [("getWindowProperty", "Kung-Fu Chess", cv2.WND_PROP_VISIBLE)],
-        )
-        self.assertTrue(is_open)
+        assert backend.calls == [('getWindowProperty', 'Kung-Fu Chess', cv2.WND_PROP_VISIBLE)]
+        assert is_open
 
     def test_is_window_open_returns_false_after_window_is_closed(self) -> None:
         backend = FakeCvWindowBackend()
         backend.window_property = -1.0
 
         is_open = Img.is_window_open("Kung-Fu Chess", backend)
-        self.assertFalse(is_open)
+        assert not is_open
 
     def test_is_window_open_returns_false_when_opencv_reports_missing_window(
         self,
@@ -129,17 +126,17 @@ class TestImgWindowOperations(unittest.TestCase):
         backend.window_error = cv2.error("Window no longer exists")
 
         is_open = Img.is_window_open("Kung-Fu Chess", backend)
-        self.assertFalse(is_open)
+        assert not is_open
 
     def test_close_all_windows_delegates_to_destroy_all_windows(self) -> None:
         backend = FakeCvWindowBackend()
 
         Img.close_all_windows(backend)
 
-        self.assertEqual(backend.calls, [("destroyAllWindows",)])
+        assert backend.calls == [('destroyAllWindows',)]
 
 
-class TestImgMouseCallback(unittest.TestCase):
+class TestImgMouseCallback:
     """Verify left/right-click dispatch without opening a real OpenCV window.
 
     A fake OpenCV backend prevents any real window from being created,
@@ -152,19 +149,19 @@ class TestImgMouseCallback(unittest.TestCase):
         Img.set_mouse_callbacks(
             "Kung-Fu Chess", on_left_click, on_right_click, backend
         )
-        self.assertIsNotNone(backend.mouse_callback)
+        assert backend.mouse_callback is not None
         return backend, backend.mouse_callback
 
     def test_left_button_down_invokes_only_left_callback_with_coordinates(self) -> None:
         on_left_click = RecordingCallback()
         on_right_click = RecordingCallback()
         backend, on_mouse = self._install(on_left_click, on_right_click)
-        self.assertEqual(backend.calls[0], ("namedWindow", "Kung-Fu Chess"))
+        assert backend.calls[0] == ('namedWindow', 'Kung-Fu Chess')
 
         on_mouse(cv2.EVENT_LBUTTONDOWN, 42, 84, 0, None)
 
-        self.assertEqual(on_left_click.calls, [(42, 84)])
-        self.assertEqual(on_right_click.calls, [])
+        assert on_left_click.calls == [(42, 84)]
+        assert on_right_click.calls == []
 
     def test_right_button_down_invokes_only_right_callback_with_coordinates(
         self,
@@ -175,8 +172,8 @@ class TestImgMouseCallback(unittest.TestCase):
 
         on_mouse(cv2.EVENT_RBUTTONDOWN, 42, 84, 0, None)
 
-        self.assertEqual(on_right_click.calls, [(42, 84)])
-        self.assertEqual(on_left_click.calls, [])
+        assert on_right_click.calls == [(42, 84)]
+        assert on_left_click.calls == []
 
     def test_unrelated_mouse_events_invoke_neither_callback(self) -> None:
         on_left_click = RecordingCallback()
@@ -187,8 +184,8 @@ class TestImgMouseCallback(unittest.TestCase):
         on_mouse(cv2.EVENT_LBUTTONUP, 10, 20, 0, None)
         on_mouse(cv2.EVENT_RBUTTONUP, 10, 20, 0, None)
 
-        self.assertEqual(on_left_click.calls, [])
-        self.assertEqual(on_right_click.calls, [])
+        assert on_left_click.calls == []
+        assert on_right_click.calls == []
 
     def test_public_callbacks_receive_only_x_and_y(self) -> None:
         """OpenCV event/flags/userdata details must not leak past Img."""
@@ -199,16 +196,13 @@ class TestImgMouseCallback(unittest.TestCase):
         on_mouse(cv2.EVENT_LBUTTONDOWN, 7, 9, 123, object())
         on_mouse(cv2.EVENT_RBUTTONDOWN, 11, 13, 456, object())
 
-        self.assertEqual(on_left_click.calls, [(7, 9)])
-        self.assertEqual(on_right_click.calls, [(11, 13)])
+        assert on_left_click.calls == [(7, 9)]
+        assert on_right_click.calls == [(11, 13)]
 
     def test_exactly_one_mouse_callback_is_installed(self) -> None:
         backend, _ = self._install(RecordingCallback(), RecordingCallback())
 
-        self.assertEqual(
-            [call for call in backend.calls if call[0] == "setMouseCallback"],
-            [("setMouseCallback", "Kung-Fu Chess")],
-        )
+        assert [call for call in backend.calls if call[0] == 'setMouseCallback'] == [('setMouseCallback', 'Kung-Fu Chess')]
 
     def test_named_window_created_before_callback_installed(self) -> None:
         backend = FakeCvWindowBackend()
@@ -217,21 +211,18 @@ class TestImgMouseCallback(unittest.TestCase):
             "Kung-Fu Chess", RecordingCallback(), RecordingCallback(), backend
         )
 
-        self.assertEqual(
-            [call[0] for call in backend.calls],
-            ["namedWindow", "setMouseCallback"],
-        )
+        assert [call[0] for call in backend.calls] == ['namedWindow', 'setMouseCallback']
 
 
-class TestImgDrawRectangle(unittest.TestCase):
+class TestImgDrawRectangle:
     def test_draw_rectangle_changes_expected_border_pixels(self) -> None:
         img = Img()
         img.img = np.zeros((20, 20, 3), dtype=np.uint8)
 
         img.draw_rectangle((2, 2), (10, 10), (255, 255, 255), 1)
 
-        self.assertTrue((img.img[2, 5] == 255).all())
-        self.assertTrue((img.img[5, 2] == 255).all())
+        assert (img.img[2, 5] == 255).all()
+        assert (img.img[5, 2] == 255).all()
 
     def test_pixels_outside_border_remain_unchanged(self) -> None:
         img = Img()
@@ -239,26 +230,22 @@ class TestImgDrawRectangle(unittest.TestCase):
 
         img.draw_rectangle((2, 2), (10, 10), (255, 255, 255), 1)
 
-        self.assertTrue((img.img[5, 5] == 0).all())  # inside the (unfilled) rectangle
-        self.assertTrue((img.img[0, 0] == 0).all())  # outside the rectangle entirely
+        assert (img.img[5, 5] == 0).all()  # inside the (unfilled) rectangle
+        assert (img.img[0, 0] == 0).all()  # outside the rectangle entirely
 
     def test_draw_rectangle_on_unloaded_image_raises_clear_error(self) -> None:
         img = Img()
-        with self.assertRaisesRegex(ValueError, "not loaded"):
+        with pytest.raises(ValueError, match='not loaded'):
             img.draw_rectangle((0, 0), (5, 5), (255, 255, 255), 1)
 
     def test_non_positive_thickness_raises_clear_error(self) -> None:
         img = Img()
         img.img = np.zeros((20, 20, 3), dtype=np.uint8)
-        with self.assertRaisesRegex(ValueError, "thickness"):
+        with pytest.raises(ValueError, match='thickness'):
             img.draw_rectangle((0, 0), (5, 5), (255, 255, 255), 0)
 
     def test_degenerate_rectangle_coordinates_raise_clear_error(self) -> None:
         img = Img()
         img.img = np.zeros((20, 20, 3), dtype=np.uint8)
-        with self.assertRaisesRegex(ValueError, "bottom_right"):
+        with pytest.raises(ValueError, match='bottom_right'):
             img.draw_rectangle((10, 10), (5, 5), (255, 255, 255), 1)
-
-
-if __name__ == "__main__":
-    unittest.main()

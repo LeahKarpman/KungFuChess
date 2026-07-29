@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import unittest
 from functools import partial
+
+import pytest
 
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.input.controller import Controller
@@ -122,10 +123,10 @@ class FakeWindow:
         self.close_calls += 1
 
 
-class TestRunLoop(unittest.TestCase):
+class TestRunLoop:
     """Exercise the persistent window loop without opening a real OpenCV window."""
 
-    def setUp(self) -> None:
+    def setup_method(self) -> None:
         self.window = FakeWindow()
         self.presentation = FakePresentation()
         self.run_loop = partial(
@@ -148,10 +149,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(
-            engine.wait_calls,
-            [500, 700],
-        )
+        assert engine.wait_calls == [500, 700]
 
     def test_accumulates_fractional_milliseconds_across_frames(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -167,10 +165,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(
-            engine.wait_calls,
-            [0, 0, 1],
-        )
+        assert engine.wait_calls == [0, 0, 1]
 
     def test_total_delivered_time_matches_total_elapsed_time(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -189,7 +184,7 @@ class TestRunLoop(unittest.TestCase):
 
         delivered_ms = sum(engine.wait_calls)
         total_elapsed_ms = int((clock_values[-1] - clock_values[0]) * 1000)
-        self.assertEqual(delivered_ms, total_elapsed_ms)
+        assert delivered_ms == total_elapsed_ms
 
     def test_fractional_milliseconds_are_not_double_counted(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -205,10 +200,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(
-            engine.wait_calls,
-            [0, 1, 0, 1],
-        )
+        assert engine.wait_calls == [0, 1, 0, 1]
 
     def test_consumes_events_once_per_completed_iteration(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -224,7 +216,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(engine.consume_events_calls, 3)
+        assert engine.consume_events_calls == 3
 
     def test_consumes_events_before_mouse_input_is_polled(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -237,7 +229,7 @@ class TestRunLoop(unittest.TestCase):
             return 27
 
         def consume_events() -> tuple[object, ...]:
-            self.assertEqual(controller.click_calls, [])
+            assert controller.click_calls == []
             return ()
 
         engine.consume_events_hook = consume_events
@@ -250,8 +242,8 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(engine.consume_events_calls, 1)
-        self.assertEqual(controller.click_calls, [(123, 456)])
+        assert engine.consume_events_calls == 1
+        assert controller.click_calls == [(123, 456)]
 
     def test_exits_on_escape_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -267,9 +259,9 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(len(renderer.render_calls), 1)
-        self.assertEqual(engine.consume_events_calls, 1)
-        self.assertEqual(self.window.close_calls, 1)
+        assert len(renderer.render_calls) == 1
+        assert engine.consume_events_calls == 1
+        assert self.window.close_calls == 1
 
     def test_exits_on_q_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -285,9 +277,9 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(len(renderer.render_calls), 1)
-        self.assertEqual(engine.consume_events_calls, 1)
-        self.assertEqual(self.window.close_calls, 1)
+        assert len(renderer.render_calls) == 1
+        assert engine.consume_events_calls == 1
+        assert self.window.close_calls == 1
 
     def test_exits_on_uppercase_q_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -303,9 +295,9 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(len(renderer.render_calls), 1)
-        self.assertEqual(engine.consume_events_calls, 1)
-        self.assertEqual(self.window.close_calls, 1)
+        assert len(renderer.render_calls) == 1
+        assert engine.consume_events_calls == 1
+        assert self.window.close_calls == 1
 
     def test_visible_window_keeps_loop_running(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -321,8 +313,8 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(len(renderer.render_calls), 2)
-        self.assertEqual(self.window.is_open_calls, ["Kung-Fu Chess"])
+        assert len(renderer.render_calls) == 2
+        assert self.window.is_open_calls == ['Kung-Fu Chess']
 
     def test_game_over_frame_remains_visible_until_exit_key(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -347,13 +339,10 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(len(renderer.render_calls), 2)
-        self.assertEqual(
-            renderer.render_calls[-1],
-            (game_over_snapshot, None, self.presentation.snapshot_value),
-        )
-        self.assertEqual(self.window.is_open_calls, ["Kung-Fu Chess"])
-        self.assertEqual(self.window.close_calls, 1)
+        assert len(renderer.render_calls) == 2
+        assert renderer.render_calls[-1] == (game_over_snapshot, None, self.presentation.snapshot_value)
+        assert self.window.is_open_calls == ['Kung-Fu Chess']
+        assert self.window.close_calls == 1
 
     def test_exits_when_window_is_closed_with_x(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -370,12 +359,10 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(len(renderer.render_calls), 2)
-        self.assertEqual(engine.consume_events_calls, 2)
-        self.assertEqual(
-            self.window.is_open_calls, ["Kung-Fu Chess", "Kung-Fu Chess"]
-        )
-        self.assertEqual(self.window.close_calls, 1)
+        assert len(renderer.render_calls) == 2
+        assert engine.consume_events_calls == 2
+        assert self.window.is_open_calls == ['Kung-Fu Chess', 'Kung-Fu Chess']
+        assert self.window.close_calls == 1
 
     def test_ignores_unrelated_keys_and_keeps_looping(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -391,7 +378,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(len(renderer.render_calls), 3)
+        assert len(renderer.render_calls) == 3
 
     def test_cleanup_runs_even_if_render_raises(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -400,7 +387,7 @@ class TestRunLoop(unittest.TestCase):
         clock_values = iter([0.0, 0.1])
         poll_key = SequencePollKey()
 
-        with self.assertRaises(RuntimeError):
+        with pytest.raises(RuntimeError):
             self.run_loop(
                 engine,
                 renderer,
@@ -409,7 +396,7 @@ class TestRunLoop(unittest.TestCase):
                 poll_key=poll_key,
             )
 
-        self.assertEqual(self.window.close_calls, 1)
+        assert self.window.close_calls == 1
 
     def test_cleanup_runs_if_mouse_callback_setup_raises(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -425,7 +412,7 @@ class TestRunLoop(unittest.TestCase):
 
         poll_key = SequencePollKey()
 
-        with self.assertRaises(RuntimeError) as raised:
+        with pytest.raises(RuntimeError) as raised:
             self.run_loop(
                 engine,
                 renderer,
@@ -434,13 +421,13 @@ class TestRunLoop(unittest.TestCase):
                 poll_key=poll_key,
             )
 
-        self.assertIs(raised.exception, error)
-        self.assertEqual(self.window.close_calls, 1)
-        self.assertEqual(clock_calls, 0)
-        self.assertEqual(engine.wait_calls, [])
-        self.assertEqual(engine.snapshot_calls, 0)
-        self.assertEqual(renderer.render_calls, [])
-        self.assertEqual(poll_key.calls, [])
+        assert raised.value is error
+        assert self.window.close_calls == 1
+        assert clock_calls == 0
+        assert engine.wait_calls == []
+        assert engine.snapshot_calls == 0
+        assert renderer.render_calls == []
+        assert poll_key.calls == []
 
     def test_cleanup_runs_if_initial_clock_raises(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -452,7 +439,7 @@ class TestRunLoop(unittest.TestCase):
 
         poll_key = SequencePollKey()
 
-        with self.assertRaises(RuntimeError) as raised:
+        with pytest.raises(RuntimeError) as raised:
             self.run_loop(
                 engine,
                 renderer,
@@ -461,10 +448,10 @@ class TestRunLoop(unittest.TestCase):
                 poll_key=poll_key,
             )
 
-        self.assertIs(raised.exception, error)
-        self.assertEqual(self.window.close_calls, 1)
-        self.assertEqual(engine.wait_calls, [])
-        self.assertEqual(renderer.render_calls, [])
+        assert raised.value is error
+        assert self.window.close_calls == 1
+        assert engine.wait_calls == []
+        assert renderer.render_calls == []
 
     def test_does_not_open_a_real_window(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -480,7 +467,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(renderer.frame.show_frame_calls, ["Kung-Fu Chess"])
+        assert renderer.frame.show_frame_calls == ['Kung-Fu Chess']
 
     def test_mouse_callback_installed_exactly_once(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -496,7 +483,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(len(self.window.callback_calls), 1)
+        assert len(self.window.callback_calls) == 1
 
     def test_installed_callback_delegates_exact_coordinates_to_controller_click(
         self,
@@ -517,7 +504,7 @@ class TestRunLoop(unittest.TestCase):
         _window_name, on_left_click, _on_right_click = self.window.callback_calls[0]
         on_left_click(123, 456)
 
-        self.assertEqual(controller.click_calls, [(123, 456)])
+        assert controller.click_calls == [(123, 456)]
 
     def test_installed_callback_delegates_exact_coordinates_to_controller_jump(
         self,
@@ -538,7 +525,7 @@ class TestRunLoop(unittest.TestCase):
         _window_name, _on_left_click, on_right_click = self.window.callback_calls[0]
         on_right_click(123, 456)
 
-        self.assertEqual(controller.jump_calls, [(123, 456)])
+        assert controller.jump_calls == [(123, 456)]
 
     def test_rendering_receives_current_controller_selected(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -555,10 +542,7 @@ class TestRunLoop(unittest.TestCase):
             poll_key=poll_key,
         )
 
-        self.assertEqual(
-            renderer.render_calls,
-            [(engine.snapshot_value, selected, self.presentation.snapshot_value)],
-        )
+        assert renderer.render_calls == [(engine.snapshot_value, selected, self.presentation.snapshot_value)]
 
     def test_next_frame_reflects_selection_change_from_a_click(self) -> None:
         engine, renderer = _make_engine_and_renderer()
@@ -583,11 +567,11 @@ class TestRunLoop(unittest.TestCase):
 
         first_selected = renderer.render_calls[0][1]
         second_selected = renderer.render_calls[1][1]
-        self.assertIsNone(first_selected)
-        self.assertEqual(second_selected, Position(0, 0))
+        assert first_selected is None
+        assert second_selected == Position(0, 0)
 
 
-class TestMainComposition(unittest.TestCase):
+class TestMainComposition:
     def test_renderer_and_mapper_receive_the_same_board_geometry(self) -> None:
         layout = BoardLayout(cell_size=73, origin_x=11, origin_y=17)
         snapshot = GameSnapshot(
@@ -625,17 +609,11 @@ class TestMainComposition(unittest.TestCase):
         mapper = captured_mappers[0]
         sample_x = layout.origin_x + layout.cell_size // 2
         sample_y = layout.origin_y + 3
-        self.assertEqual(mapper.pixel_to_cell(sample_x, sample_y), Position(0, 0))
+        assert mapper.pixel_to_cell(sample_x, sample_y) == Position(0, 0)
 
         presentation = GamePresentationSnapshot(0, 0, (), ())
         baseline = renderer.render(snapshot, None, presentation)
         selected = renderer.render(snapshot, Position(0, 0), presentation)
-        self.assertFalse(
-            (baseline.pixels[sample_y, sample_x] == selected.pixels[sample_y, sample_x]).all()
-        )
-        self.assertIs(loop_calls[0][0], engine)
-        self.assertIs(loop_calls[0][1], renderer)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert not (baseline.pixels[sample_y, sample_x] == selected.pixels[sample_y, sample_x]).all()
+        assert loop_calls[0][0] is engine
+        assert loop_calls[0][1] is renderer
