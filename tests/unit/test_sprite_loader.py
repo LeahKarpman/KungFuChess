@@ -56,6 +56,18 @@ class RecordingFrameSelector:
 
 
 class TestSpriteLoader:
+    @pytest.mark.parametrize("sprite_size", [0, -1])
+    def test_non_positive_sprite_size_is_rejected(self, sprite_size: int) -> None:
+        with pytest.raises(ValueError, match="sprite_size"):
+            SpriteLoader(REAL_PIECES_ROOT, sprite_size=sprite_size)
+
+    def test_configured_sprite_size_resizes_loaded_idle_sprite(self) -> None:
+        loader = SpriteLoader(REAL_PIECES_ROOT, sprite_size=32)
+
+        sprite = loader.load_idle_sprite("P", "w")
+
+        assert sprite.pixels.shape == (32, 32, 4)
+
     @pytest.mark.parametrize(
         ("kind", "color", "directory"),
         ALL_KIND_COLOR_DIRECTORIES,
@@ -207,6 +219,12 @@ class TestSpriteLoaderAnimation:
         loader = SpriteLoader(self.root)
 
         with pytest.raises(ValueError, match='[Mm]alformed'):
+            loader.get_animation_frame("P", "w", "move", 0)
+
+    def test_missing_animation_config_raises_clear_error(self) -> None:
+        loader = SpriteLoader(self.root)
+
+        with pytest.raises(FileNotFoundError, match="animation config"):
             loader.get_animation_frame("P", "w", "move", 0)
 
     def test_missing_graphics_metadata_raises_clear_error(self) -> None:

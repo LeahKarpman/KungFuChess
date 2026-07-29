@@ -206,6 +206,12 @@ class TestBoardRenderer:
         with pytest.raises(ValueError, match='Unsupported board dimensions'):
             self.renderer.render(_snapshot([], width=3, height=3))
 
+    def test_render_on_rejects_unsupported_board_dimensions(self) -> None:
+        canvas = Img().create(800, 800)
+
+        with pytest.raises(ValueError, match="Unsupported board dimensions"):
+            self.renderer.render_on(canvas, _snapshot([], width=8, height=7))
+
     def test_renderer_does_not_mutate_snapshot(self) -> None:
         piece = PieceSnapshot(
             id="wQ_0_0", color="w", kind="Q", cell=Position(0, 0), state="idle"

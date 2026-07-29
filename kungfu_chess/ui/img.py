@@ -109,10 +109,22 @@ class Img:
         if self.img is None or other_img.img is None:
             raise ValueError("Both images must be loaded before drawing.")
 
-        if self.img.shape[2] != other_img.img.shape[2]:
-            if self.img.shape[2] == 3 and other_img.img.shape[2] == 4:
+        if self.img.ndim != 3:
+            raise ValueError("Source image must have three or four channels.")
+        if other_img.img.ndim != 3:
+            raise ValueError("Target image must have three or four channels.")
+
+        source_channels = self.img.shape[2]
+        target_channels = other_img.img.shape[2]
+        if source_channels not in (3, 4):
+            raise ValueError("Source image must have three or four channels.")
+        if target_channels not in (3, 4):
+            raise ValueError("Target image must have three or four channels.")
+
+        if source_channels != target_channels:
+            if source_channels == 3:
                 self.img = self._cv.cvtColor(self.img, self._cv.COLOR_BGR2BGRA)
-            elif self.img.shape[2] == 4 and other_img.img.shape[2] == 3:
+            else:
                 self.img = self._cv.cvtColor(self.img, self._cv.COLOR_BGRA2BGR)
 
         h, w = self.img.shape[:2]

@@ -1,7 +1,54 @@
-# pyright: reportOptionalMemberAccess=false
+# pyright: reportOptionalMemberAccess=false, reportArgumentType=false
 
+from kungfu_chess.engine.game_engine import GameEngine
+from kungfu_chess.io.board_parser import parse_board
+from kungfu_chess.model.events import MoveCompleted, RestCompleted, RestStarted
+from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
+from kungfu_chess.realtime.motion import ArrivalEvent
+from kungfu_chess.rules.rule_engine import RuleEngine
 from tests.unit.game_engine_test_support import make_engine as _engine
+
+
+class _LeftoverArrivalArbiter:
+    """Explicit collaborator that reports an arrival with a completed cooldown."""
+
+    short_cooldown_ms = 50
+    long_cooldown_ms = 100
+
+    def __init__(self, piece: Piece) -> None:
+        self._piece = piece
+        self._emitted = False
+        self.start_rest_calls: list[tuple[Piece, str, int]] = []
+
+    def next_boundary_ms(self) -> None:
+        return None
+
+    def advance_time(self, ms: int) -> list[ArrivalEvent]:
+        if self._emitted:
+            return []
+        self._emitted = True
+        return [
+            ArrivalEvent(
+                piece=self._piece,
+                source=Position(0, 0),
+                destination=Position(0, 1),
+                leftover_ms=ms - 100,
+                original_source=Position(0, 0),
+                requested_destination=Position(0, 1),
+            )
+        ]
+
+    def consume_completed_rest_piece_ids(self) -> tuple[str, ...]:
+        return ()
+
+    def resolve_arrival(self, piece_id: str) -> None:
+        assert piece_id == self._piece.id
+        self._piece.state = "idle"
+
+    def start_rest(self, piece: Piece, rest_kind: str, elapsed_ms: int = 0) -> None:
+        self.start_rest_calls.append((piece, rest_kind, elapsed_ms))
+        piece.state = "idle" if elapsed_ms >= self.long_cooldown_ms else rest_kind
 
 
 class TestCooldownStateTransitions:
@@ -204,6 +251,26 @@ class TestCooldownConcurrency:
         assert len(rests) == 1
         assert rests[0].piece_id == mover.id
         assert rests[0].elapsed_ms == 2000
+
+    def test_arrival_leftover_that_completes_rest_emits_both_rest_events(
+        self,
+    ) -> None:
+        board = parse_board(["wR ."])
+        piece = board.get_piece(Position(0, 0))
+        assert piece is not None
+        arbiter = _LeftoverArrivalArbiter(piece)
+        engine = GameEngine(board, RuleEngine(), arbiter)
+
+        engine.wait(200)
+
+        events = engine.consume_events()
+        assert [type(event) for event in events] == [
+            MoveCompleted,
+            RestStarted,
+            RestCompleted,
+        ]
+        assert arbiter.start_rest_calls == [(piece, "long_rest", 100)]
+        assert piece.state == "idle"
 
 
 class TestCooldownBusyRejection:

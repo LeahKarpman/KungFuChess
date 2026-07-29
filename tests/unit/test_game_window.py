@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 from functools import partial
+from pathlib import Path
 
 import pytest
 
 from kungfu_chess.engine.game_engine import GameEngine
+from kungfu_chess.game_config import GameConfig
 from kungfu_chess.input.controller import Controller
 from kungfu_chess.model.game_state import GameSnapshot
 from kungfu_chess.model.position import Position
-from kungfu_chess.ui.game_window import _build_renderer, run_game, run_loop
+from kungfu_chess.ui.game_window import (
+    _build_renderer,
+    _build_standard_engine,
+    main,
+    run_game,
+    run_loop,
+)
 from kungfu_chess.ui.layout import BoardLayout
 from kungfu_chess.ui.presentation import GamePresentationSnapshot
 from kungfu_chess.ui.renderer import BoardRenderer
@@ -572,6 +580,88 @@ class TestRunLoop:
 
 
 class TestMainComposition:
+    def test_standard_engine_builder_uses_board_and_cooldowns(self) -> None:
+        config = GameConfig(
+            piece_values={"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0},
+            short_cooldown_ms=123,
+            long_cooldown_ms=456,
+        )
+
+        engine = _build_standard_engine(config)
+        snapshot = engine.snapshot()
+
+        assert (snapshot.width, snapshot.height) == (8, 8)
+        assert len(snapshot.pieces) == 32
+
+        white_pawn = next(
+            piece
+            for piece in snapshot.pieces
+            if piece.kind == "P" and piece.color == "w"
+        )
+        assert engine.jump(white_pawn.cell).ok
+        engine.wait(1000)
+        rest = engine.snapshot().rests[0]
+        assert rest.duration_ms == 123
+
+    def test_main_composes_dependencies_without_opening_a_window(self) -> None:
+        config_path = Path("safe-config.json")
+        layout = BoardLayout(cell_size=50, origin_x=3, origin_y=4)
+        config = GameConfig(
+            piece_values={"P": 1, "N": 3, "B": 3, "R": 5, "Q": 9, "K": 0},
+        )
+        snapshot = GameSnapshot(
+            pieces=(),
+            motions=(),
+            rests=(),
+            game_over=False,
+            width=8,
+            height=6,
+        )
+        engine = FakeEngine(snapshot)
+        renderer = FakeRenderer()
+        presentation = FakePresentation()
+        calls: list[tuple[object, ...]] = []
+
+        def config_loader(path: Path) -> GameConfig:
+            calls.append(("config", path))
+            return config
+
+        def engine_builder(received_config: GameConfig) -> FakeEngine:
+            calls.append(("engine", received_config))
+            return engine
+
+        def renderer_builder(received_layout: BoardLayout) -> FakeRenderer:
+            calls.append(("renderer", received_layout))
+            return renderer
+
+        def presentation_factory(**values: object) -> FakePresentation:
+            calls.append(("presentation", values))
+            return presentation
+
+        def game_runner(*arguments: object) -> None:
+            calls.append(("run", *arguments))
+
+        main(
+            config_path=config_path,
+            layout=layout,
+            config_loader=config_loader,
+            engine_builder=engine_builder,
+            renderer_builder=renderer_builder,
+            presentation_factory=presentation_factory,
+            game_runner=game_runner,
+        )
+
+        assert calls == [
+            ("config", config_path),
+            ("engine", config),
+            ("renderer", layout),
+            (
+                "presentation",
+                {"piece_values": config.piece_values, "board_height": 6},
+            ),
+            ("run", engine, renderer, layout, presentation),
+        ]
+
     def test_renderer_and_mapper_receive_the_same_board_geometry(self) -> None:
         layout = BoardLayout(cell_size=73, origin_x=11, origin_y=17)
         snapshot = GameSnapshot(

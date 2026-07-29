@@ -140,3 +140,26 @@ class TestLoadGameConfig:
     def test_missing_file_raises_clear_error(self, config_path: Path) -> None:
         with pytest.raises(FileNotFoundError):
             load_game_config(config_path)
+
+    @pytest.mark.parametrize("content", ["[]", '"not an object"', "null"])
+    def test_top_level_json_must_be_an_object(
+        self, config_path: Path, content: str
+    ) -> None:
+        _write(config_path, content)
+
+        with pytest.raises(TypeError, match="JSON object"):
+            load_game_config(config_path)
+
+    def test_piece_values_field_is_required(self, config_path: Path) -> None:
+        _write(
+            config_path,
+            json.dumps(
+                {
+                    "short_cooldown_ms": 2000,
+                    "long_cooldown_ms": 10000,
+                }
+            ),
+        )
+
+        with pytest.raises(ValueError, match="piece_values"):
+            load_game_config(config_path)

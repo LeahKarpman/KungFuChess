@@ -7,6 +7,13 @@ from kungfu_chess.model.position import Position
 
 
 class TestBoardParser:
+    def test_empty_input_creates_an_empty_board(self) -> None:
+        board = parse_board([])
+
+        assert board.width == 0
+        assert board.height == 0
+        assert board.all_pieces() == ()
+
     def test_valid_board(self):
         lines = [
             "wR wN wB wQ wK wB wN wR",

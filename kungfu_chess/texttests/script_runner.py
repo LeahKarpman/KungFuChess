@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable
 from typing import TextIO
 
 from ..engine.game_engine import GameEngine
@@ -49,6 +50,10 @@ def run(lines: list[str], output: TextIO | None = None) -> None:
             engine.wait(cmd[1])
 
 
-def main() -> None:
-    lines = [line.rstrip("\n") for line in sys.stdin]
-    run(lines)
+def main(
+    input_stream: Iterable[str] = sys.stdin,
+    output: TextIO | None = None,
+) -> None:
+    """Run a script from an input stream through the text boundary adapter."""
+    lines = [line.rstrip("\n") for line in input_stream]
+    run(lines, output=output)

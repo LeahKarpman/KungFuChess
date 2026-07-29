@@ -4,7 +4,7 @@ from io import StringIO
 
 import pytest
 
-from kungfu_chess.texttests.script_runner import run
+from kungfu_chess.texttests.script_runner import main, run
 
 
 class TestTextScripts:
@@ -17,6 +17,26 @@ class TestTextScripts:
     def test_board_then_print(self):
         out = self._run(["Board", "wK .", ". bK", "print board"])
         assert out == 'wK .\n. bK\n'
+
+    def test_default_output_stream_is_stdout(self, capsys: pytest.CaptureFixture[str]) -> None:
+        run(["Board", "wK .", "print board"])
+
+        assert capsys.readouterr().out == "wK .\n"
+
+    def test_wait_before_board_is_ignored_and_later_commands_still_run(self) -> None:
+        out = self._run(["wait 1000", "Board", "wK .", "print board"])
+
+        assert out == "wK .\n"
+
+    def test_main_reads_from_explicit_stream_and_writes_to_explicit_stream(
+        self,
+    ) -> None:
+        input_stream = StringIO("Board:\nwK .\nCommands:\nprint board\n")
+        output = StringIO()
+
+        main(input_stream=input_stream, output=output)
+
+        assert output.getvalue() == "wK .\n"
 
     # ── Iteration 5 ──────────────────────────────────────────────────────────
     def test_move_updates_board_at_first_cell_boundary(self):
