@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import unittest
-
 from kungfu_chess.engine.game_engine import GameEngine, JumpResult, MoveResult
 from kungfu_chess.input.board_mapper import BoardMapper
 from kungfu_chess.input.controller import Controller
@@ -112,28 +110,28 @@ def _finish_game_with_existing_selection() -> tuple[Controller, RecordingEngine]
     return controller, engine
 
 
-class TestController(unittest.TestCase):
+class TestController:
     """Verify click interpretation and selection state."""
 
     def test_first_click_on_piece_selects(self) -> None:
         controller, _ = _setup(["wR . ."])
         result = controller.click(50, 50)
 
-        self.assertEqual(result.action, "selected")
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert result.action == 'selected'
+        assert controller.selected == Position(0, 0)
 
     def test_first_click_on_empty_ignored(self) -> None:
         controller, _ = _setup(["wR . ."])
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertIsNone(controller.selected)
+        assert result.action == 'ignored'
+        assert controller.selected is None
 
     def test_outside_click_no_selection_ignored(self) -> None:
         controller, _ = _setup(["wR . ."])
         result = controller.click(9999, 9999)
 
-        self.assertEqual(result.action, "ignored")
+        assert result.action == 'ignored'
 
     def test_outside_click_with_selection_cancels(self) -> None:
         controller, _ = _setup(["wR . ."])
@@ -141,19 +139,19 @@ class TestController(unittest.TestCase):
 
         result = controller.click(9999, 9999)
 
-        self.assertEqual(result.action, "cancelled")
-        self.assertIsNone(controller.selected)
+        assert result.action == 'cancelled'
+        assert controller.selected is None
 
     def test_clicking_selected_piece_cancels_selection(self) -> None:
         controller, _ = _setup(["wR . ."])
         controller.click(50, 50)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         result = controller.click(50, 50)
 
-        self.assertEqual(result.action, "cancelled")
-        self.assertEqual(result.position, Position(0, 0))
-        self.assertIsNone(controller.selected)
+        assert result.action == 'cancelled'
+        assert result.position == Position(0, 0)
+        assert controller.selected is None
 
     def test_clicking_selected_piece_does_not_request_move(self) -> None:
         fake_engine = FakeControllerEngine(
@@ -164,8 +162,8 @@ class TestController(unittest.TestCase):
 
         result = controller.click(50, 50)
 
-        self.assertEqual(result.action, "cancelled")
-        self.assertEqual(fake_engine.request_move_calls, [])
+        assert result.action == 'cancelled'
+        assert fake_engine.request_move_calls == []
 
     def test_clicking_selected_piece_leaves_engine_state_unchanged(self) -> None:
         controller, engine = _setup(["wR . ."])
@@ -174,19 +172,19 @@ class TestController(unittest.TestCase):
 
         controller.click(50, 50)
 
-        self.assertEqual(engine.snapshot(), snapshot_before)
-        self.assertEqual(engine.consume_events(), ())
+        assert engine.snapshot() == snapshot_before
+        assert engine.consume_events() == ()
 
     def test_clicking_different_friendly_piece_replaces_selection(self) -> None:
         controller, _ = _setup(["wR wN ."])
         controller.click(50, 50)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "selected")
-        self.assertEqual(result.position, Position(0, 1))
-        self.assertEqual(controller.selected, Position(0, 1))
+        assert result.action == 'selected'
+        assert result.position == Position(0, 1)
+        assert controller.selected == Position(0, 1)
 
     def test_second_inboard_click_sends_move_and_clears_selection(self) -> None:
         fake_engine = FakeControllerEngine(
@@ -199,12 +197,9 @@ class TestController(unittest.TestCase):
 
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "move_requested")
-        self.assertEqual(
-            fake_engine.request_move_calls,
-            [(Position(0, 0), Position(0, 1))],
-        )
-        self.assertIsNone(controller.selected)
+        assert result.action == 'move_requested'
+        assert fake_engine.request_move_calls == [(Position(0, 0), Position(0, 1))]
+        assert controller.selected is None
 
     def test_rejected_move_preserves_selection(self) -> None:
         """A move rejected by the engine must not clear the current selection.
@@ -223,12 +218,12 @@ class TestController(unittest.TestCase):
         mapper = BoardMapper(3, 1)
         controller = Controller(mapper, fake_engine)
         controller.click(50, 50)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "move_requested")
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert result.action == 'move_requested'
+        assert controller.selected == Position(0, 0)
 
     def test_rejected_move_via_real_engine_preserves_selection(self) -> None:
         """Same rule, exercised through the real engine and rule engine.
@@ -238,12 +233,12 @@ class TestController(unittest.TestCase):
         """
         controller, _ = _setup(["wN . ."])
         controller.click(50, 50)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "move_requested")
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert result.action == 'move_requested'
+        assert controller.selected == Position(0, 0)
 
     def test_moving_piece_cannot_be_selected(self) -> None:
         controller, engine = _setup(["wR . ."])
@@ -251,8 +246,8 @@ class TestController(unittest.TestCase):
 
         result = controller.click(50, 50)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertIsNone(controller.selected)
+        assert result.action == 'ignored'
+        assert controller.selected is None
 
     def test_selected_piece_can_target_moving_enemy(self) -> None:
         """Forward a moving enemy cell as the selected piece's destination."""
@@ -262,8 +257,8 @@ class TestController(unittest.TestCase):
 
         result = controller.click(50, 150)
 
-        self.assertEqual(result.action, "move_requested")
-        self.assertIsNone(controller.selected)
+        assert result.action == 'move_requested'
+        assert controller.selected is None
 
     def test_jump_maps_pixels_and_delegates_to_engine(self) -> None:
         """Forward an in-board jump request without applying game rules."""
@@ -274,9 +269,9 @@ class TestController(unittest.TestCase):
 
         result = controller.jump(150, 250)
 
-        self.assertEqual(result.action, "jump_requested")
-        self.assertEqual(result.position, Position(2, 1))
-        self.assertEqual(fake_engine.jump_calls, [Position(2, 1)])
+        assert result.action == 'jump_requested'
+        assert result.position == Position(2, 1)
+        assert fake_engine.jump_calls == [Position(2, 1)]
 
     def test_jump_does_not_call_snapshot_to_decide_legality(self) -> None:
         fake_engine = FakeControllerEngine(
@@ -286,7 +281,7 @@ class TestController(unittest.TestCase):
 
         controller.jump(150, 250)
 
-        self.assertEqual(fake_engine.snapshot_calls, 0)
+        assert fake_engine.snapshot_calls == 0
 
     def test_jump_outside_board_is_ignored(self) -> None:
         """Reject an out-of-board jump before it reaches the game engine."""
@@ -295,8 +290,8 @@ class TestController(unittest.TestCase):
 
         result = controller.jump(-1, 50)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertEqual(fake_engine.jump_calls, [])
+        assert result.action == 'ignored'
+        assert fake_engine.jump_calls == []
 
     def test_right_click_outside_board_preserves_selection_and_does_not_call_engine(
         self,
@@ -307,33 +302,33 @@ class TestController(unittest.TestCase):
         mapper = BoardMapper(3, 1)
         controller = Controller(mapper, fake_engine)
         controller.click(50, 50)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         result = controller.jump(-1, 50)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertEqual(controller.selected, Position(0, 0))
-        self.assertEqual(fake_engine.jump_calls, [])
+        assert result.action == 'ignored'
+        assert controller.selected == Position(0, 0)
+        assert fake_engine.jump_calls == []
 
     def test_valid_jump_clears_current_selection(self) -> None:
         controller, _ = _setup(["wR . ."])
         controller.click(50, 50)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         result = controller.jump(50, 50)
 
-        self.assertEqual(result.action, "jump_requested")
-        self.assertIsNone(controller.selected)
+        assert result.action == 'jump_requested'
+        assert controller.selected is None
 
     def test_valid_jump_by_piece_b_clears_selection_belonging_to_piece_a(self) -> None:
         """An accepted jump clears the selection even for an unrelated piece."""
         controller, _ = _setup(["wR . wN"])
         controller.click(50, 50)  # select piece A (wR) at (0, 0)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         controller.jump(250, 50)  # piece B (wN) at (0, 2) jumps
 
-        self.assertIsNone(controller.selected)
+        assert controller.selected is None
 
     def test_rejected_jump_preserves_current_selection(self) -> None:
         fake_engine = FakeControllerEngine(
@@ -345,44 +340,44 @@ class TestController(unittest.TestCase):
         mapper = BoardMapper(3, 1)
         controller = Controller(mapper, fake_engine)
         controller.click(50, 50)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         result = controller.jump(150, 50)
 
-        self.assertEqual(result.action, "jump_requested")
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert result.action == 'jump_requested'
+        assert controller.selected == Position(0, 0)
 
     def test_jump_on_empty_cell_preserves_current_selection(self) -> None:
         """Let the engine and rules reject an in-board jump onto an empty cell."""
         controller, _ = _setup(["wR . ."])
         controller.click(50, 50)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         result = controller.jump(150, 50)  # (0, 1) is empty
 
-        self.assertEqual(result.action, "jump_requested")
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert result.action == 'jump_requested'
+        assert controller.selected == Position(0, 0)
 
     def test_busy_piece_jump_rejection_preserves_current_selection(self) -> None:
         controller, engine = _setup(["wR . wN"])
         controller.click(250, 50)  # select wN at (0, 2)
-        self.assertEqual(controller.selected, Position(0, 2))
+        assert controller.selected == Position(0, 2)
         engine.request_move(Position(0, 0), Position(0, 1))  # wR busy, still on board
 
         result = controller.jump(50, 50)  # attempt to jump the busy wR
 
-        self.assertEqual(result.action, "jump_requested")
-        self.assertEqual(controller.selected, Position(0, 2))
+        assert result.action == 'jump_requested'
+        assert controller.selected == Position(0, 2)
 
 
-class TestControllerGameOver(unittest.TestCase):
+class TestControllerGameOver:
     """Verify that terminal games ignore input without mutating engine state."""
 
     def test_existing_selection_clears_when_selected_is_next_read(self) -> None:
         controller, engine = _finish_game_with_existing_selection()
 
-        self.assertIsNone(controller.selected)
-        self.assertTrue(engine.game_over)
+        assert controller.selected is None
+        assert engine.game_over
 
     def test_left_click_on_piece_or_empty_cell_does_not_select(self) -> None:
         controller, _ = _finish_game_with_existing_selection()
@@ -390,9 +385,9 @@ class TestControllerGameOver(unittest.TestCase):
         piece_result = controller.click(50, 50)
         empty_cell_result = controller.click(150, 50)
 
-        self.assertEqual(piece_result.action, "ignored")
-        self.assertEqual(empty_cell_result.action, "ignored")
-        self.assertIsNone(controller.selected)
+        assert piece_result.action == 'ignored'
+        assert empty_cell_result.action == 'ignored'
+        assert controller.selected is None
 
     def test_left_click_does_not_request_move_or_change_engine_state(self) -> None:
         controller, engine = _finish_game_with_existing_selection()
@@ -401,10 +396,10 @@ class TestControllerGameOver(unittest.TestCase):
 
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertEqual(engine.request_move_calls, [])
-        self.assertEqual(engine.snapshot(), snapshot_before)
-        self.assertEqual(engine.consume_events(), ())
+        assert result.action == 'ignored'
+        assert engine.request_move_calls == []
+        assert engine.snapshot() == snapshot_before
+        assert engine.consume_events() == ()
 
     def test_right_click_does_not_request_jump_or_change_engine_state(self) -> None:
         controller, engine = _finish_game_with_existing_selection()
@@ -413,22 +408,22 @@ class TestControllerGameOver(unittest.TestCase):
 
         result = controller.jump(50, 50)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertEqual(engine.jump_calls, [])
-        self.assertEqual(engine.snapshot(), snapshot_before)
-        self.assertEqual(engine.consume_events(), ())
+        assert result.action == 'ignored'
+        assert engine.jump_calls == []
+        assert engine.snapshot() == snapshot_before
+        assert engine.consume_events() == ()
 
     def test_left_click_selects_piece_while_game_is_active(self) -> None:
         controller, engine = _setup(["wR . ."])
 
         result = controller.click(50, 50)
 
-        self.assertFalse(engine.game_over)
-        self.assertEqual(result.action, "selected")
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert not engine.game_over
+        assert result.action == 'selected'
+        assert controller.selected == Position(0, 0)
 
 
-class TestControllerCooldownSelection(unittest.TestCase):
+class TestControllerCooldownSelection:
     """Verify that resting pieces follow the same selection rules as moving ones."""
 
     def test_resting_piece_cannot_be_selected(self) -> None:
@@ -438,8 +433,8 @@ class TestControllerCooldownSelection(unittest.TestCase):
 
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertIsNone(controller.selected)
+        assert result.action == 'ignored'
+        assert controller.selected is None
 
     def test_clicking_friendly_resting_piece_preserves_prior_selection(self) -> None:
         controller, engine = _setup(["wR . wN"])
@@ -447,13 +442,13 @@ class TestControllerCooldownSelection(unittest.TestCase):
         engine.wait(1000)  # wR now long_rest at (0, 1); wN stays idle at (0, 2)
 
         select_result = controller.click(250, 50)
-        self.assertEqual(select_result.action, "selected")
-        self.assertEqual(controller.selected, Position(0, 2))
+        assert select_result.action == 'selected'
+        assert controller.selected == Position(0, 2)
 
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "ignored")
-        self.assertEqual(controller.selected, Position(0, 2))
+        assert result.action == 'ignored'
+        assert controller.selected == Position(0, 2)
 
     def test_enemy_resting_piece_remains_a_valid_destination(self) -> None:
         controller, engine = _setup(["wR . . bR"])
@@ -463,11 +458,11 @@ class TestControllerCooldownSelection(unittest.TestCase):
         controller.click(350, 50)  # select bR at (0, 3)
         result = controller.click(250, 50)  # target the resting enemy at (0, 2)
 
-        self.assertEqual(result.action, "move_requested")
-        self.assertIsNone(controller.selected)
+        assert result.action == 'move_requested'
+        assert controller.selected is None
 
 
-class TestControllerSelectionIdentity(unittest.TestCase):
+class TestControllerSelectionIdentity:
     """Verify selection survives by piece identity, not by stale cell position.
 
     Selection must not silently keep pointing at a cell whose original
@@ -480,12 +475,12 @@ class TestControllerSelectionIdentity(unittest.TestCase):
     ) -> None:
         controller, engine = _setup(["wR . bR"])
         controller.click(50, 50)  # select wR at (0, 0)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         engine.request_move(Position(0, 2), Position(0, 0))  # bR captures wR
         engine.wait(2000)
 
-        self.assertIsNone(controller.selected)
+        assert controller.selected is None
 
     def test_clicking_another_friendly_piece_reselects_immediately_after_capture(
         self,
@@ -499,15 +494,15 @@ class TestControllerSelectionIdentity(unittest.TestCase):
         """
         controller, engine = _setup(["wR . bR . wN"])
         controller.click(50, 50)  # select wR at (0, 0)
-        self.assertEqual(controller.selected, Position(0, 0))
+        assert controller.selected == Position(0, 0)
 
         engine.request_move(Position(0, 2), Position(0, 0))  # bR captures wR
         engine.wait(2000)  # bR now rests at (0, 0)
 
         result = controller.click(450, 50)  # click own knight at (0, 4)
 
-        self.assertEqual(result.action, "selected")
-        self.assertEqual(controller.selected, Position(0, 4))
+        assert result.action == 'selected'
+        assert controller.selected == Position(0, 4)
 
     def test_reselection_after_capture_can_be_toggled_across_repeated_clicks(
         self,
@@ -521,10 +516,10 @@ class TestControllerSelectionIdentity(unittest.TestCase):
         second_result = controller.click(450, 50)  # cancel that selection
         third_result = controller.click(450, 50)  # select it again
 
-        self.assertEqual(first_result.action, "selected")
-        self.assertEqual(second_result.action, "cancelled")
-        self.assertEqual(third_result.action, "selected")
-        self.assertEqual(controller.selected, Position(0, 4))
+        assert first_result.action == 'selected'
+        assert second_result.action == 'cancelled'
+        assert third_result.action == 'selected'
+        assert controller.selected == Position(0, 4)
 
     def test_selection_works_immediately_after_rest_completion(self) -> None:
         controller, engine = _setup(["wR . ."])
@@ -534,5 +529,5 @@ class TestControllerSelectionIdentity(unittest.TestCase):
 
         result = controller.click(150, 50)
 
-        self.assertEqual(result.action, "selected")
-        self.assertEqual(controller.selected, Position(0, 1))
+        assert result.action == 'selected'
+        assert controller.selected == Position(0, 1)

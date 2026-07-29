@@ -125,14 +125,24 @@ def run_game(
     loop(engine, renderer, controller, presentation)
 
 
-def main() -> None:
+def main(
+    *,
+    config_path: Path = _GAME_CONFIG_PATH,
+    layout: BoardLayout = GAME_BOARD_LAYOUT,
+    config_loader: Callable[[Path], GameConfig] = load_game_config,
+    engine_builder: Callable[[GameConfig], GameEngine] = _build_standard_engine,
+    renderer_builder: Callable[[BoardLayout], GameRenderer] = _build_renderer,
+    presentation_factory: Callable[..., GamePresentation] = GamePresentation,
+    game_runner: Callable[
+        [GameEngine, GameRenderer, BoardLayout, GamePresentation], None
+    ] = run_game,
+) -> None:
     """Run the persistent real-time window until the user closes it."""
-    config = load_game_config(_GAME_CONFIG_PATH)
-    engine = _build_standard_engine(config)
-    layout = GAME_BOARD_LAYOUT
-    renderer = _build_renderer(layout)
-    presentation = GamePresentation(
+    config = config_loader(config_path)
+    engine = engine_builder(config)
+    renderer = renderer_builder(layout)
+    presentation = presentation_factory(
         piece_values=config.piece_values,
         board_height=engine.snapshot().height,
     )
-    run_game(engine, renderer, layout, presentation)
+    game_runner(engine, renderer, layout, presentation)

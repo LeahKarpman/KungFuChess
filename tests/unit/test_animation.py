@@ -66,3 +66,10 @@ class TestSelectFrameIndex:
     def test_non_positive_frames_per_sec_raises_clear_error(self) -> None:
         with pytest.raises(ValueError, match="frames_per_sec"):
             select_frame_index(0, 0, 5, is_loop=True)
+
+    @pytest.mark.parametrize("frame_count", [0, -1])
+    def test_non_positive_frame_count_raises_clear_error(
+        self, frame_count: int
+    ) -> None:
+        with pytest.raises(ValueError, match="frame_count"):
+            select_frame_index(0, 12, frame_count, is_loop=True)

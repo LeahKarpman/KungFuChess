@@ -744,6 +744,16 @@ class TestTimedRecordValidation:
         )
         assert motion.duration_ms == 1000
 
+    def test_positive_duration_zero_length_move_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="route"):
+            Motion(
+                piece=self.piece,
+                action_kind="move",
+                source=Position(0, 0),
+                destination=Position(0, 0),
+                duration_ms=1000,
+            )
+
     def test_zero_duration_rest_is_rejected(self) -> None:
         with pytest.raises(ValueError):
             Rest(piece=self.piece, rest_kind="short_rest", duration_ms=0)
@@ -779,3 +789,73 @@ class TestTimedRecordValidation:
         assert boundary is not None
         assert boundary is not None
         assert boundary > 0
+
+
+class TestMotionBoundaryStates:
+    def setup_method(self) -> None:
+        self.source = Position(0, 0)
+        self.destination = Position(0, 1)
+        self.piece = Piece("wR_0_0", "w", "R", self.source)
+
+    def _motion(self, **overrides: object) -> Motion:
+        arguments = {
+            "piece": self.piece,
+            "action_kind": "move",
+            "source": self.source,
+            "destination": self.destination,
+            "duration_ms": 1000,
+        }
+        arguments.update(overrides)
+        return Motion(**arguments)  # type: ignore[arg-type]
+
+    def test_explicit_route_and_resume_cells_are_preserved(self) -> None:
+        resume_cell = Position(0, 2)
+        resume_waypoint = Position(0, 3)
+
+        motion = self._motion(
+            route=(self.destination,),
+            current_cell=resume_cell,
+            current_waypoint=resume_waypoint,
+        )
+
+        assert motion.route == (self.destination,)
+        assert motion.current_cell == resume_cell
+        assert motion.current_waypoint == resume_waypoint
+        assert motion.next_cell == self.destination
+
+    def test_completion_changes_only_at_the_final_boundary(self) -> None:
+        motion = self._motion()
+
+        assert not motion.is_complete()
+        motion.advance(1000)
+        assert motion.is_complete()
+
+    def test_accept_boundary_before_arrival_is_a_noop(self) -> None:
+        motion = self._motion()
+
+        accepted = motion.accept_boundary()
+
+        assert not accepted
+        assert motion.current_cell == self.source
+        assert motion.route_index == 0
+
+
+class TestRealTimeArbiterBoundaryCleanup:
+    def test_stopping_unknown_motion_is_a_noop(self) -> None:
+        arbiter = RealTimeArbiter()
+
+        arbiter.stop_motion("unknown_piece")
+
+        assert arbiter.active_actions() == ()
+
+    def test_completed_rest_does_not_revive_a_captured_piece(self) -> None:
+        arbiter = RealTimeArbiter(short_cooldown_ms=100)
+        piece = Piece("wP_0_0", "w", "P", Position(0, 0))
+        arbiter.start_rest(piece, "short_rest")
+        piece.state = "captured"
+
+        arbiter.advance_time(100)
+
+        assert piece.state == "captured"
+        assert arbiter.active_rests() == ()
+        assert arbiter.consume_completed_rest_piece_ids() == (piece.id,)

@@ -1058,3 +1058,76 @@ Result:
 ### Source Code Updated
 
 - None
+
+## 2026-07-29 — Testing-Standard Compliance Completed
+
+### Sources
+
+- Explicit user instruction to complete the testing-standard work in three stages
+- Current implementation and native-Pytest suite
+- Branch-aware whole-package coverage reports generated before and after the work
+
+### Authority
+
+Latest explicit user decision.
+
+### Stage 1 — Native Pytest Migration
+
+- Migrated the final six legacy modules to native Pytest:
+  - `tests/integration/test_text_scripts.py`
+  - `tests/unit/test_board_renderer.py`
+  - `tests/unit/test_controller.py`
+  - `tests/unit/test_game_window.py`
+  - `tests/unit/test_img.py`
+  - `tests/unit/test_sprite_loader.py`
+- Preserved every test behavior and converted 34 `subTest` cases to explicit
+  parametrized cases.
+- Removed all remaining `unittest`, `TestCase`, `self.assert*`,
+  `assertRaises`, and `subTest` structures.
+- Verified 607 collected and passing tests after migration.
+- Commit subject: `refactor(tests): complete native pytest migration`.
+
+### Stage 2 — Reproducible Coverage
+
+- Added `coverage` to `requirements.txt`.
+- Added `.coveragerc` with branch coverage, whole-`kungfu_chess` measurement,
+  missing-line reporting, HTML output, and a 94.91% regression threshold.
+- Documented the exact erase, run, report, and HTML commands in `README.md`.
+- Verified that `.coverage` and `htmlcov/` remain ignored and untracked.
+- Verified the 94.91% baseline: 1579 statements, 58 missed statements,
+  446 branches, and 37 partial branches.
+- Commit subject: `chore(test): add coverage reporting workflow`.
+
+### Stage 3 — Meaningful Remaining Paths
+
+- Added behavior-focused tests for invalid and incomplete configuration, empty
+  board parsing, motion and rest boundary states, parser and runner edge cases,
+  presentation and renderer validation, sprite validation and resizing,
+  safe UI composition, and remaining observable engine behavior.
+- Expanded `Img` coverage through an explicit fake OpenCV backend across
+  creation, loading, resizing, conversion, composition, drawing, text, and
+  window operations.
+- Added explicit stream injection to the text-runner entry adapter.
+- Added explicit dependency factories and layout/config inputs to the
+  graphical composition root.
+- Added clear `Img.draw_on` validation for unsupported source and target pixel
+  shapes.
+- Final 2026-07-29 verification: 687 collected tests, 687 passed, 0 failed,
+  and 100.00% coverage across 1588 statements and 452 branches.
+- No paths were intentionally left uncovered.
+- Commit subject: `test: cover remaining meaningful paths`.
+
+### Compliance Audit
+
+- Legacy `unittest` structures: 0
+- Prohibited monkey-patching occurrences: 0
+- Generated coverage artifacts committed: 0
+
+### Production Files Updated
+
+- `kungfu_chess/texttests/script_runner.py`: explicit input/output stream seam
+  for the boundary adapter.
+- `kungfu_chess/ui/game_window.py`: explicit composition-root factories and
+  layout/config inputs for safe assembly and testing.
+- `kungfu_chess/ui/img.py`: explicit validation for unsupported pixel shapes
+  before conversion and drawing.

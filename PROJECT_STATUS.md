@@ -1,21 +1,18 @@
 # Kung-Fu Chess — Current Project Status
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 
 ## 1. Current Position
 
-Current verified branch:
-
-`main`
-
 Repository state:
 
-- `main` is aligned with `origin/main` after the current documentation publication.
+- The complete testing-standard change set is verified on
+  `test/complete-testing-compliance` for publication to `main`.
 - The official root-level project documents are tracked in Git.
 - Obsolete `CTD26` ignore and Pyright-exclusion entries have been removed after the local reference directory was deleted.
-- Latest verified implementation baseline: `236c2f24c4baf769c0ba927d4c321f671af448f3`
-- Baseline subject: `Merge pull request #27 from LeahKarpman/refactor/native-pytest-game-engine`
-- Baseline commit date: 2026-07-28 13:51:02 +0300
+- The testing work uses three focused commits: native-Pytest migration,
+  reproducible coverage workflow, and meaningful remaining-path coverage.
+- Generated `.coverage` data and `htmlcov/` output remain ignored and untracked.
 
 The current repository includes a compact graphical dashboard with side scores and per-color move panels.
 
@@ -23,46 +20,39 @@ The next confirmed work is focused rather than a general UI rewrite:
 
 - Add the application-provided default names `White Player` and `Black Player` without introducing a name-entry workflow.
 - Perform a focused Observer design review and introduce the pattern only if a genuine one-to-many notification relationship currently requires it.
-- Continue the native-Pytest and coverage compliance work.
 
 ## 2. Current Verification
 
-Complete suite:
+Complete suite, verified on 2026-07-29 on
+`test/complete-testing-compliance` after the Stage 3 source-and-test changes:
 
 ```text
-$env:PYTHONDONTWRITEBYTECODE='1'
-python -m pytest -q -p no:cacheprovider
+python -m pytest -q
 ```
 
 Result:
 
-- Passed: 578
-- Subtests passed: 36
+- Collected: 687
+- Passed: 687
 - Failed: 0
 - Errors: 0
-- Duration: 5.05 seconds
-
-The verification command was run with bytecode writing and Pytest's cache provider disabled so the review would not create project changes.
-
-Last recorded branch-aware coverage, measured at commit `d137984a5947b94cfd91605664c7a1aae3b6e1bd`:
+- Duration: 6.69 seconds
 
 ```text
-COVERAGE_FILE=<external-path> python -m coverage run --branch --source=kungfu_chess -m pytest -q
-COVERAGE_FILE=<external-path> python -m coverage report -m
+python -m coverage erase
+python -m coverage run -m pytest
+python -m coverage report -m
+python -m coverage html
 ```
 
-Historical result:
+Current branch-aware result:
 
-- Total coverage: 95%
-- Statements: 1577
-- Missed statements: 62
-- Branches: 446
-- Partially covered branches: 39
-- Lowest-covered production module: `kungfu_chess/ui/img.py` at 72%
-
-This is not a current coverage measurement for the `236c2f2` implementation baseline.
-
-The current environment cannot reproduce the measurement because the `coverage` package is not installed and is not declared in `requirements.txt`. No committed coverage configuration or HTML report is present.
+- Total coverage: 100.00%
+- Statements: 1588
+- Missed statements: 0
+- Branches: 452
+- Partially covered branches: 0
+- HTML report: generated successfully at `htmlcov/index.html`
 
 ## 3. Verified Implemented System
 
@@ -143,16 +133,18 @@ The supplied play video is treated as a visual reference only. It demonstrates r
 
 Current audit:
 
-- Test files: 32
-- Files still using `unittest` structures: 8
-- `unittest.TestCase` classes: 30
-- Native module-level Pytest test functions: 28
+- Test files: 33
+- Files using `unittest` structures: 0
+- `unittest.TestCase` classes: 0
+- Collected native-Pytest tests: 687
 
 Status:
 
-**Partially compliant.**
+**Compliant.**
 
-PR #27 migrated the remaining GameEngine move, jump, collision, and cooldown suites. The remaining `unittest.TestCase` tests still require migration.
+The last six legacy modules were migrated without removing or weakening any
+test behavior. Their 34 former `subTest` cases are now explicit parametrized
+Pytest cases.
 
 ### Monkey Patching
 
@@ -170,11 +162,13 @@ The previous patch-based tests were replaced with explicit seams and collaborato
 
 Status:
 
-**Partially compliant.**
+**Compliant.**
 
-The last recorded coverage was 95% at commit `d137984`, but current coverage for the `236c2f2` implementation baseline has not been measured. The project still lacks the installed or declared coverage tooling, a reproducible committed configuration, and the preferred HTML report.
-
-Coverage work must remain behavior-driven rather than adding tests solely to increase a percentage.
+`coverage` is declared in `requirements.txt`; `.coveragerc` enables branch
+coverage, measures all of `kungfu_chess`, reports missing lines, enforces the
+94.91% verified regression baseline, and writes the HTML report to `htmlcov/`.
+Every previously uncovered statement and partial branch now has a
+behavior-focused test, producing 100.00% statement-and-branch coverage.
 
 ## 6. Architecture and Future Extensibility
 
@@ -207,6 +201,9 @@ Recently completed correctness work:
 2. Geometry-based renderer row limiting.
 3. Winning-action completion before `GameOver` for every supported capture path.
 4. Preservation of the rule that no rest begins after game over.
+5. Complete native-Pytest migration with no monkey-patching.
+6. Reproducible whole-package branch coverage and HTML reporting.
+7. Behavior-focused coverage of every production statement and branch.
 
 Remaining official UI work:
 
@@ -215,9 +212,6 @@ Remaining official UI work:
 
 Remaining quality work:
 
-- Complete migration to native Pytest.
-- Add a committed coverage workflow and HTML report.
-- Add meaningful tests for uncovered production paths.
 - Complete the binary-representation migration explanation.
 - Establish minimal future rule-definition extension boundaries without implementing custom games.
 
@@ -246,27 +240,16 @@ No source or test code was changed during this documentation and configuration u
 
 Files updated:
 
-- `.gitignore`
-- `AGENTS.md`
-- `PROJECT_CONTEXT.md`
 - `PROJECT_STATUS.md`
 - `PROJECT_RECORD.md`
-- `pyrightconfig.json`
 
 Sources reconciled:
 
-- Current repository working tree
-- Current Git history
-- Complete current test run
-- Historical coverage measurement and current tooling availability
-- Official CTD graphics presentation
-- Play-reference video
-- Latest explicit project-chat decisions about agent workflow, document ownership, default player names, the meaning of `Observer`, and removal of the local `CTD26/` reference directory
+- The complete Stage 1 native-Pytest migration
+- The committed Stage 2 coverage workflow
+- The 2026-07-29 Stage 3 complete-suite and coverage run
+- Static audits for legacy `unittest` structures and prohibited monkey-patching
 
-Current branch:
+Verified change-set branch:
 
-`main`
-
-Current verified implementation baseline:
-
-`236c2f2 Merge pull request #27 from LeahKarpman/refactor/native-pytest-game-engine`
+`test/complete-testing-compliance`

@@ -1,5 +1,6 @@
 # pyright: reportOptionalMemberAccess=false
 
+from kungfu_chess.model.events import PiecePromoted
 from kungfu_chess.model.position import Position
 from tests.unit.game_engine_test_support import make_engine as _engine
 
@@ -51,6 +52,19 @@ class TestPromotion:
         assert result.ok
         assert rook is not None
         assert rook.kind == "R"
+
+    def test_pawn_move_before_promotion_row_keeps_pawn_kind(self) -> None:
+        engine, board = _engine([".", ".", "wP"])
+
+        result = engine.request_move(Position(2, 0), Position(1, 0))
+        engine.wait(1000)
+
+        pawn = board.get_piece(Position(1, 0))
+        events = engine.consume_events()
+        assert result.ok
+        assert pawn is not None
+        assert pawn.kind == "P"
+        assert not any(isinstance(event, PiecePromoted) for event in events)
 
 
 class TestCooldownPromotion:

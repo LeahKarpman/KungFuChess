@@ -4,7 +4,8 @@ import pytest
 
 from kungfu_chess.engine.game_engine import GameEngine
 from kungfu_chess.io.board_parser import parse_board
-from kungfu_chess.model.events import JumpStarted
+from kungfu_chess.model.events import JumpCompleted, JumpStarted
+from kungfu_chess.model.piece import Piece
 from kungfu_chess.model.position import Position
 from kungfu_chess.realtime.real_time_arbiter import RealTimeArbiter
 from kungfu_chess.rules.rule_engine import JumpValidation, RuleEngine
@@ -94,6 +95,28 @@ class TestLandingReservation:
         assert winner is not None
         assert winner.color == "w"
         assert engine.game_over
+
+    def test_jump_arrival_never_overwrites_a_friendly_occupant(self) -> None:
+        engine, board = _engine(["wP ."])
+        landing = Position(0, 0)
+        jumping_piece = board.get_piece(landing)
+        assert jumping_piece is not None
+        assert engine.jump(landing).ok
+        engine.consume_events()
+
+        friendly_piece = Piece("wR_external", "w", "R", landing)
+        board.add_piece(friendly_piece)
+
+        engine.wait(1000)
+
+        assert board.get_piece(landing) is friendly_piece
+        assert jumping_piece.state == "idle"
+        assert jumping_piece.id not in {
+            piece.id for piece in engine.snapshot().pieces
+        }
+        assert not any(
+            isinstance(event, JumpCompleted) for event in engine.consume_events()
+        )
 
 
 class TestJumpScheduling:

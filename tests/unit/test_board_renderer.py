@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import unittest
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from kungfu_chess.model.game_state import (
     GameSnapshot,
@@ -130,8 +130,8 @@ def _snapshot(
     )
 
 
-class TestBoardRenderer(unittest.TestCase):
-    def setUp(self) -> None:
+class TestBoardRenderer:
+    def setup_method(self) -> None:
         self.layout = BoardLayout(cell_size=100)
         self.sprite_loader = SpriteLoader(PIECES_ROOT)
         self.renderer = BoardRenderer(BOARD_IMAGE_PATH, self.sprite_loader, self.layout)
@@ -139,7 +139,7 @@ class TestBoardRenderer(unittest.TestCase):
     def test_output_dimensions_match_expected_board_pixel_size(self) -> None:
         frame = self.renderer.render(_snapshot([]))
         height, width = frame.img.shape[:2]
-        self.assertEqual((width, height), (800, 800))
+        assert (width, height) == (800, 800)
 
     def test_game_over_message_drawn_when_snapshot_is_game_over(self) -> None:
         image_factory = RecordingImageFactory()
@@ -152,27 +152,7 @@ class TestBoardRenderer(unittest.TestCase):
 
         frame = renderer.render(_snapshot([], game_over=True))
 
-        self.assertEqual(
-            frame.text_calls,
-            [
-                (
-                    "GAME OVER",
-                    220,
-                    422,
-                    2.0,
-                    (0, 0, 0, 255),
-                    8,
-                ),
-                (
-                    "GAME OVER",
-                    220,
-                    422,
-                    2.0,
-                    (255, 255, 255, 255),
-                    3,
-                ),
-            ],
-        )
+        assert frame.text_calls == [('GAME OVER', 220, 422, 2.0, (0, 0, 0, 255), 8), ('GAME OVER', 220, 422, 2.0, (255, 255, 255, 255), 3)]
 
     def test_game_over_message_not_drawn_when_game_is_active(self) -> None:
         image_factory = RecordingImageFactory()
@@ -185,7 +165,7 @@ class TestBoardRenderer(unittest.TestCase):
 
         frame = renderer.render(_snapshot([], game_over=False))
 
-        self.assertEqual(frame.text_calls, [])
+        assert frame.text_calls == []
 
     def test_single_piece_rendered_at_expected_cell(self) -> None:
         piece = PieceSnapshot(
@@ -196,11 +176,11 @@ class TestBoardRenderer(unittest.TestCase):
 
         cell_center = occupied_frame.img[50, 50]
         empty_cell_center = empty_frame.img[50, 50]
-        self.assertFalse((cell_center == empty_cell_center).all())
+        assert not (cell_center == empty_cell_center).all()
 
         far_cell = occupied_frame.img[750, 750]
         empty_far_cell = empty_frame.img[750, 750]
-        self.assertTrue((far_cell == empty_far_cell).all())
+        assert (far_cell == empty_far_cell).all()
 
     def test_multiple_pieces_rendered_at_different_positions(self) -> None:
         pieces = [
@@ -219,12 +199,18 @@ class TestBoardRenderer(unittest.TestCase):
         empty_at_white_cell = empty_frame.img[750, 450]
         empty_at_black_cell = empty_frame.img[50, 450]
 
-        self.assertFalse((white_king_cell == empty_at_white_cell).all())
-        self.assertFalse((black_king_cell == empty_at_black_cell).all())
+        assert not (white_king_cell == empty_at_white_cell).all()
+        assert not (black_king_cell == empty_at_black_cell).all()
 
     def test_unsupported_board_dimensions_raise_clear_error(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Unsupported board dimensions"):
+        with pytest.raises(ValueError, match='Unsupported board dimensions'):
             self.renderer.render(_snapshot([], width=3, height=3))
+
+    def test_render_on_rejects_unsupported_board_dimensions(self) -> None:
+        canvas = Img().create(800, 800)
+
+        with pytest.raises(ValueError, match="Unsupported board dimensions"):
+            self.renderer.render_on(canvas, _snapshot([], width=8, height=7))
 
     def test_renderer_does_not_mutate_snapshot(self) -> None:
         piece = PieceSnapshot(
@@ -234,8 +220,8 @@ class TestBoardRenderer(unittest.TestCase):
 
         self.renderer.render(snapshot)
 
-        self.assertEqual(snapshot.pieces, (piece,))
-        self.assertEqual((snapshot.width, snapshot.height), (8, 8))
+        assert snapshot.pieces == (piece,)
+        assert (snapshot.width, snapshot.height) == (8, 8)
 
     def test_board_asset_is_not_reloaded_for_every_frame(self) -> None:
         image_factory = RecordingImageFactory()
@@ -250,7 +236,7 @@ class TestBoardRenderer(unittest.TestCase):
         renderer.render(_snapshot([]))
         renderer.render(_snapshot([]))
 
-        self.assertEqual(image_factory.read_paths, [BOARD_IMAGE_PATH])
+        assert image_factory.read_paths == [BOARD_IMAGE_PATH]
 
     def test_repeated_renders_do_not_accumulate_previous_pieces(self) -> None:
         piece = PieceSnapshot(
@@ -262,20 +248,20 @@ class TestBoardRenderer(unittest.TestCase):
         baseline_frame = self.renderer.render(_snapshot([]))
 
         # The piece drawn in the first render must not leak into a later, empty frame.
-        self.assertTrue((second_frame.img[50, 50] == baseline_frame.img[50, 50]).all())
+        assert (second_frame.img[50, 50] == baseline_frame.img[50, 50]).all()
 
     def test_selected_none_draws_no_border(self) -> None:
         implicit_frame = self.renderer.render(_snapshot([]))
         explicit_none_frame = self.renderer.render(_snapshot([]), selected=None)
 
-        self.assertTrue((implicit_frame.img == explicit_none_frame.img).all())
+        assert (implicit_frame.img == explicit_none_frame.img).all()
 
     def test_selected_position_draws_border_in_correct_cell(self) -> None:
         baseline = self.renderer.render(_snapshot([]))
         selected_frame = self.renderer.render(_snapshot([]), selected=Position(0, 0))
 
         # A point along the top edge of cell (0, 0), just inside its border.
-        self.assertFalse((selected_frame.img[3, 50] == baseline.img[3, 50]).all())
+        assert not (selected_frame.img[3, 50] == baseline.img[3, 50]).all()
 
     def test_selection_in_one_cell_does_not_alter_another_cell(self) -> None:
         baseline = self.renderer.render(_snapshot([]))
@@ -283,7 +269,7 @@ class TestBoardRenderer(unittest.TestCase):
 
         far_cell_pixel = selected_frame.img[750, 750]
         baseline_far_cell_pixel = baseline.img[750, 750]
-        self.assertTrue((far_cell_pixel == baseline_far_cell_pixel).all())
+        assert (far_cell_pixel == baseline_far_cell_pixel).all()
 
     def test_selection_border_visible_after_piece_rendering(self) -> None:
         piece = PieceSnapshot(
@@ -294,27 +280,22 @@ class TestBoardRenderer(unittest.TestCase):
             _snapshot([piece]), selected=Position(0, 0)
         )
 
-        self.assertFalse(
-            (
-                frame_with_piece_only.img[3, 50]
-                == frame_with_piece_and_selection.img[3, 50]
-            ).all()
-        )
+        assert not (frame_with_piece_only.img[3, 50] == frame_with_piece_and_selection.img[3, 50]).all()
 
     def test_render_does_not_mutate_selected_position(self) -> None:
         selected = Position(0, 0)
 
         self.renderer.render(_snapshot([]), selected=selected)
 
-        self.assertEqual(selected, Position(0, 0))
+        assert selected == Position(0, 0)
 
     def test_out_of_board_selected_position_raises_clear_error(self) -> None:
-        with self.assertRaisesRegex(ValueError, "outside"):
+        with pytest.raises(ValueError, match='outside'):
             self.renderer.render(_snapshot([]), selected=Position(8, 0))
 
 
-class TestBoardRendererMotion(unittest.TestCase):
-    def setUp(self) -> None:
+class TestBoardRendererMotion:
+    def setup_method(self) -> None:
         self.layout = BoardLayout(cell_size=100)
         self.sprite_loader = SpriteLoader(PIECES_ROOT)
         self.renderer = BoardRenderer(BOARD_IMAGE_PATH, self.sprite_loader, self.layout)
@@ -336,7 +317,7 @@ class TestBoardRendererMotion(unittest.TestCase):
 
         # Cell (6, 0) center pixel: the interpolated sprite has moved to the
         # shared border with cell (5, 0) and no longer covers its own center.
-        self.assertTrue((frame.img[650, 50] == baseline.img[650, 50]).all())
+        assert (frame.img[650, 50] == baseline.img[650, 50]).all()
 
     def test_moving_piece_drawn_at_interpolated_position(self) -> None:
         piece = PieceSnapshot(
@@ -354,43 +335,45 @@ class TestBoardRendererMotion(unittest.TestCase):
         baseline = self.renderer.render(_snapshot([]))
 
         # Halfway between row 6 (y=650) and row 5 (y=550) is y=600, at col 0 (x=50).
-        self.assertFalse((frame.img[600, 50] == baseline.img[600, 50]).all())
+        assert not (frame.img[600, 50] == baseline.img[600, 50]).all()
 
+    @pytest.mark.parametrize(
+        ("elapsed_ms", "expected_center"),
+        (
+            (0, (150.0, 150.0)),
+            (1500, (200.0, 250.0)),
+            (3000, (250.0, 350.0)),
+        ),
+    )
     def test_knight_moves_directly_from_source_center_to_destination_center(
         self,
+        elapsed_ms: int,
+        expected_center: tuple[float, float],
     ) -> None:
         piece = PieceSnapshot(
             id="wN_1_1", color="w", kind="N", cell=Position(1, 1), state="moving"
         )
-        expected_centers = (
-            (0, (150.0, 150.0)),
-            (1500, (200.0, 250.0)),
-            (3000, (250.0, 350.0)),
+        motion = MotionSnapshot(
+            piece_id="wN_1_1",
+            source=Position(1, 1),
+            destination=Position(3, 2),
+            elapsed_ms=elapsed_ms,
+            duration_ms=3000,
+            action_kind="move",
+            action_elapsed_ms=elapsed_ms,
         )
+        sprite = RecordingSprite()
+        loader = RecordingSpriteLoader(animation_sprite=sprite)
+        renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
 
-        for elapsed_ms, expected_center in expected_centers:
-            with self.subTest(elapsed_ms=elapsed_ms):
-                motion = MotionSnapshot(
-                    piece_id="wN_1_1",
-                    source=Position(1, 1),
-                    destination=Position(3, 2),
-                    elapsed_ms=elapsed_ms,
-                    duration_ms=3000,
-                    action_kind="move",
-                    action_elapsed_ms=elapsed_ms,
-                )
-                sprite = RecordingSprite()
-                loader = RecordingSpriteLoader(animation_sprite=sprite)
-                renderer = BoardRenderer(BOARD_IMAGE_PATH, loader, self.layout)
+        renderer.render(_snapshot([piece], motions=[motion]))
 
-                renderer.render(_snapshot([piece], motions=[motion]))
-
-                expected_xy = self.layout.centered_top_left_at_point(
-                    expected_center,
-                    64,
-                    64,
-                )
-                self.assertEqual(sprite.draw_calls[0][1:], expected_xy)
+        expected_xy = self.layout.centered_top_left_at_point(
+            expected_center,
+            64,
+            64,
+        )
+        assert sprite.draw_calls[0][1:] == expected_xy
 
     def test_move_motion_uses_move_animation_state(self) -> None:
         piece = PieceSnapshot(
@@ -410,7 +393,7 @@ class TestBoardRendererMotion(unittest.TestCase):
 
         renderer.render(_snapshot([piece], motions=[motion]))
 
-        self.assertEqual(loader.animation_calls, [("P", "w", "move", 0)])
+        assert loader.animation_calls == [('P', 'w', 'move', 0)]
 
     def test_segment_interpolation_keeps_total_elapsed_for_animation(self) -> None:
         piece = PieceSnapshot(
@@ -431,7 +414,7 @@ class TestBoardRendererMotion(unittest.TestCase):
 
         renderer.render(_snapshot([piece], motions=[motion]))
 
-        self.assertEqual(loader.animation_calls, [("R", "w", "move", 1500)])
+        assert loader.animation_calls == [('R', 'w', 'move', 1500)]
 
     def test_jump_motion_uses_jump_animation_state(self) -> None:
         piece = PieceSnapshot(
@@ -451,7 +434,7 @@ class TestBoardRendererMotion(unittest.TestCase):
 
         renderer.render(_snapshot([piece], motions=[motion]))
 
-        self.assertEqual(loader.animation_calls, [("P", "w", "jump", 0)])
+        assert loader.animation_calls == [('P', 'w', 'jump', 0)]
 
     def test_simultaneous_motions_rendered_independently(self) -> None:
         piece_a = PieceSnapshot(
@@ -482,8 +465,8 @@ class TestBoardRendererMotion(unittest.TestCase):
         )
         baseline = self.renderer.render(_snapshot([]))
 
-        self.assertFalse((frame.img[600, 50] == baseline.img[600, 50]).all())
-        self.assertFalse((frame.img[200, 750] == baseline.img[200, 750]).all())
+        assert not (frame.img[600, 50] == baseline.img[600, 50]).all()
+        assert not (frame.img[200, 750] == baseline.img[200, 750]).all()
 
     def test_moving_pieces_drawn_after_stationary_pieces(self) -> None:
         stationary = PieceSnapshot(
@@ -512,9 +495,9 @@ class TestBoardRendererMotion(unittest.TestCase):
         renderer.render(_snapshot([stationary, moving], motions=[motion]))
 
         stationary_xy = self.layout.centered_top_left(Position(0, 0), 64, 64)
-        self.assertEqual(draw_order, ["stationary", "moving"])
-        self.assertEqual(idle_sprite.draw_calls[0][1:], stationary_xy)
-        self.assertNotEqual(moving_sprite.draw_calls[0][1:], stationary_xy)
+        assert draw_order == ['stationary', 'moving']
+        assert idle_sprite.draw_calls[0][1:] == stationary_xy
+        assert moving_sprite.draw_calls[0][1:] != stationary_xy
 
     def test_selection_border_visible_above_moving_piece(self) -> None:
         moving = PieceSnapshot(
@@ -536,12 +519,7 @@ class TestBoardRendererMotion(unittest.TestCase):
         )
 
         # A point just inside the top edge of cell (6, 0), where the border is drawn.
-        self.assertFalse(
-            (
-                frame_without_selection.img[603, 50]
-                == frame_with_selection.img[603, 50]
-            ).all()
-        )
+        assert not (frame_without_selection.img[603, 50] == frame_with_selection.img[603, 50]).all()
 
     def test_unknown_piece_id_in_motion_raises_clear_error(self) -> None:
         motion = MotionSnapshot(
@@ -552,7 +530,7 @@ class TestBoardRendererMotion(unittest.TestCase):
             duration_ms=1000,
             action_kind="move",
         )
-        with self.assertRaisesRegex(ValueError, "unknown piece_id"):
+        with pytest.raises(ValueError, match='unknown piece_id'):
             self.renderer.render(_snapshot([], motions=[motion]))
 
     def test_duplicate_motion_for_same_piece_raises_clear_error(self) -> None:
@@ -575,7 +553,7 @@ class TestBoardRendererMotion(unittest.TestCase):
             duration_ms=1000,
             action_kind="move",
         )
-        with self.assertRaisesRegex(ValueError, "Duplicate motion"):
+        with pytest.raises(ValueError, match='Duplicate motion'):
             self.renderer.render(_snapshot([piece], motions=[motion_a, motion_b]))
 
     def test_unsupported_action_kind_raises_clear_error(self) -> None:
@@ -590,7 +568,7 @@ class TestBoardRendererMotion(unittest.TestCase):
             duration_ms=1000,
             action_kind="teleport",  # type: ignore[arg-type]
         )
-        with self.assertRaisesRegex(ValueError, "Unsupported action kind"):
+        with pytest.raises(ValueError, match='Unsupported action kind'):
             self.renderer.render(_snapshot([piece], motions=[motion]))
 
     def test_render_does_not_mutate_snapshot_with_active_motion(self) -> None:
@@ -609,8 +587,8 @@ class TestBoardRendererMotion(unittest.TestCase):
 
         self.renderer.render(snapshot)
 
-        self.assertEqual(snapshot.pieces, (piece,))
-        self.assertEqual(snapshot.motions, (motion,))
+        assert snapshot.pieces == (piece,)
+        assert snapshot.motions == (motion,)
 
     def test_repeated_renders_do_not_accumulate_previous_motion_drawings(self) -> None:
         piece = PieceSnapshot(
@@ -629,13 +607,11 @@ class TestBoardRendererMotion(unittest.TestCase):
         second_frame = self.renderer.render(_snapshot([]))
         baseline_frame = self.renderer.render(_snapshot([]))
 
-        self.assertTrue(
-            (second_frame.img[600, 50] == baseline_frame.img[600, 50]).all()
-        )
+        assert (second_frame.img[600, 50] == baseline_frame.img[600, 50]).all()
 
 
-class TestBoardRendererRest(unittest.TestCase):
-    def setUp(self) -> None:
+class TestBoardRendererRest:
+    def setup_method(self) -> None:
         self.layout = BoardLayout(cell_size=100)
         self.sprite_loader = SpriteLoader(PIECES_ROOT)
         self.renderer = BoardRenderer(BOARD_IMAGE_PATH, self.sprite_loader, self.layout)
@@ -650,7 +626,7 @@ class TestBoardRendererRest(unittest.TestCase):
 
         renderer.render(_snapshot([piece]))
 
-        self.assertEqual(loader.idle_calls, [("K", "w")])
+        assert loader.idle_calls == [('K', 'w')]
 
     def test_short_rest_piece_uses_short_rest_animation_state(self) -> None:
         piece = PieceSnapshot(
@@ -665,9 +641,7 @@ class TestBoardRendererRest(unittest.TestCase):
 
         renderer.render(_snapshot([piece], rests=[rest]))
 
-        self.assertEqual(
-            loader.animation_calls, [("P", "w", "short_rest", 100)]
-        )
+        assert loader.animation_calls == [('P', 'w', 'short_rest', 100)]
 
     def test_long_rest_piece_uses_long_rest_animation_state(self) -> None:
         piece = PieceSnapshot(
@@ -682,9 +656,7 @@ class TestBoardRendererRest(unittest.TestCase):
 
         renderer.render(_snapshot([piece], rests=[rest]))
 
-        self.assertEqual(
-            loader.animation_calls, [("P", "w", "long_rest", 300)]
-        )
+        assert loader.animation_calls == [('P', 'w', 'long_rest', 300)]
 
     def test_idle_and_resting_pieces_use_same_cell_centering(self) -> None:
         cell = Position(6, 0)
@@ -708,10 +680,10 @@ class TestBoardRendererRest(unittest.TestCase):
         renderer.render(_snapshot([idle_piece, resting_piece], rests=[rest]))
 
         centered_xy = self.layout.centered_top_left(cell, 30, 42)
-        self.assertEqual(idle_sprite.draw_calls[0][1:], centered_xy)
-        self.assertEqual(resting_sprite.draw_calls[0][1:], centered_xy)
-        self.assertEqual(loader.idle_calls, [("K", "w")])
-        self.assertEqual(loader.animation_calls, [("P", "w", "long_rest", 0)])
+        assert idle_sprite.draw_calls[0][1:] == centered_xy
+        assert resting_sprite.draw_calls[0][1:] == centered_xy
+        assert loader.idle_calls == [('K', 'w')]
+        assert loader.animation_calls == [('P', 'w', 'long_rest', 0)]
 
     def test_resting_piece_not_also_rendered_with_idle_sprite(self) -> None:
         piece = PieceSnapshot(
@@ -726,7 +698,7 @@ class TestBoardRendererRest(unittest.TestCase):
 
         renderer.render(_snapshot([piece], rests=[rest]))
 
-        self.assertEqual(loader.idle_calls, [])
+        assert loader.idle_calls == []
 
     def test_rest_frame_selection_uses_rest_elapsed_ms(self) -> None:
         piece = PieceSnapshot(
@@ -741,9 +713,7 @@ class TestBoardRendererRest(unittest.TestCase):
 
         renderer.render(_snapshot([piece], rests=[rest]))
 
-        self.assertEqual(
-            loader.animation_calls, [("P", "w", "long_rest", 750)]
-        )
+        assert loader.animation_calls == [('P', 'w', 'long_rest', 750)]
 
     def test_rest_config_and_images_are_cached_across_frames(self) -> None:
         piece = PieceSnapshot(
@@ -766,8 +736,8 @@ class TestBoardRendererRest(unittest.TestCase):
             )
             renderer.render(_snapshot([piece], rests=[rest]))
 
-        self.assertEqual(len(image_factory.read_paths), 1)
-        self.assertIn("long_rest", image_factory.read_paths[0].parts)
+        assert len(image_factory.read_paths) == 1
+        assert 'long_rest' in image_factory.read_paths[0].parts
 
     def test_moving_resting_and_idle_pieces_render_together(self) -> None:
         idle_piece = PieceSnapshot(
@@ -800,13 +770,9 @@ class TestBoardRendererRest(unittest.TestCase):
         )
         baseline = self.renderer.render(_snapshot([]))
 
-        self.assertFalse((frame.img[50, 50] == baseline.img[50, 50]).all())  # idle king
-        self.assertFalse(
-            (frame.img[650, 50] == baseline.img[650, 50]).all()
-        )  # resting pawn
-        self.assertFalse(
-            (frame.img[200, 750] == baseline.img[200, 750]).all()
-        )  # moving pawn midpoint
+        assert not (frame.img[50, 50] == baseline.img[50, 50]).all()  # idle king
+        assert not (frame.img[650, 50] == baseline.img[650, 50]).all()  # resting pawn
+        assert not (frame.img[200, 750] == baseline.img[200, 750]).all()  # moving pawn midpoint
 
     def test_selection_border_visible_above_resting_piece(self) -> None:
         piece = PieceSnapshot(
@@ -821,19 +787,14 @@ class TestBoardRendererRest(unittest.TestCase):
             _snapshot([piece], rests=[rest]), selected=Position(6, 0)
         )
 
-        self.assertFalse(
-            (
-                frame_without_selection.img[603, 50]
-                == frame_with_selection.img[603, 50]
-            ).all()
-        )
+        assert not (frame_without_selection.img[603, 50] == frame_with_selection.img[603, 50]).all()
 
     def test_unknown_piece_id_in_rest_raises_clear_error(self) -> None:
         rest = RestSnapshot(
             piece_id="ghost", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000
         )
 
-        with self.assertRaisesRegex(ValueError, "unknown piece_id"):
+        with pytest.raises(ValueError, match='unknown piece_id'):
             self.renderer.render(_snapshot([], rests=[rest]))
 
     def test_duplicate_rest_for_same_piece_raises_clear_error(self) -> None:
@@ -847,7 +808,7 @@ class TestBoardRendererRest(unittest.TestCase):
             piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=50, duration_ms=10000
         )
 
-        with self.assertRaisesRegex(ValueError, "Duplicate rest"):
+        with pytest.raises(ValueError, match='Duplicate rest'):
             self.renderer.render(_snapshot([piece], rests=[rest_a, rest_b]))
 
     def test_piece_with_both_motion_and_rest_raises_clear_error(self) -> None:
@@ -866,9 +827,7 @@ class TestBoardRendererRest(unittest.TestCase):
             piece_id="wP_6_0", rest_kind="long_rest", elapsed_ms=0, duration_ms=10000
         )
 
-        with self.assertRaisesRegex(
-            ValueError, "both an active motion and an active rest"
-        ):
+        with pytest.raises(ValueError, match='both an active motion and an active rest'):
             self.renderer.render(_snapshot([piece], motions=[motion], rests=[rest]))
 
     def test_promoted_piece_uses_promoted_kinds_long_rest_asset(self) -> None:
@@ -885,7 +844,7 @@ class TestBoardRendererRest(unittest.TestCase):
 
         renderer.render(_snapshot([piece], rests=[rest]))
 
-        self.assertEqual(loader.animation_calls, [("Q", "w", "long_rest", 0)])
+        assert loader.animation_calls == [('Q', 'w', 'long_rest', 0)]
 
     def test_render_does_not_mutate_snapshot_with_active_rest(self) -> None:
         piece = PieceSnapshot(
@@ -898,9 +857,5 @@ class TestBoardRendererRest(unittest.TestCase):
 
         self.renderer.render(snapshot)
 
-        self.assertEqual(snapshot.pieces, (piece,))
-        self.assertEqual(snapshot.rests, (rest,))
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert snapshot.pieces == (piece,)
+        assert snapshot.rests == (rest,)

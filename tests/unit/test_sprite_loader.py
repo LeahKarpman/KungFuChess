@@ -6,8 +6,9 @@ import json
 import os
 import shutil
 import tempfile
-import unittest
 from pathlib import Path
+
+import pytest
 
 from kungfu_chess.ui import sprite_loader as sprite_loader_module
 from kungfu_chess.ui.animation import select_frame_index
@@ -54,37 +55,53 @@ class RecordingFrameSelector:
         return select_frame_index(elapsed_ms, frames_per_sec, frame_count, is_loop)
 
 
-class TestSpriteLoader(unittest.TestCase):
-    def test_all_valid_kind_color_combinations_load(self) -> None:
+class TestSpriteLoader:
+    @pytest.mark.parametrize("sprite_size", [0, -1])
+    def test_non_positive_sprite_size_is_rejected(self, sprite_size: int) -> None:
+        with pytest.raises(ValueError, match="sprite_size"):
+            SpriteLoader(REAL_PIECES_ROOT, sprite_size=sprite_size)
+
+    def test_configured_sprite_size_resizes_loaded_idle_sprite(self) -> None:
+        loader = SpriteLoader(REAL_PIECES_ROOT, sprite_size=32)
+
+        sprite = loader.load_idle_sprite("P", "w")
+
+        assert sprite.pixels.shape == (32, 32, 4)
+
+    @pytest.mark.parametrize(
+        ("kind", "color", "directory"),
+        ALL_KIND_COLOR_DIRECTORIES,
+    )
+    def test_all_valid_kind_color_combinations_load(
+        self, kind: str, color: str, directory: str
+    ) -> None:
         loader = SpriteLoader(REAL_PIECES_ROOT)
-        for kind, color, directory in ALL_KIND_COLOR_DIRECTORIES:
-            with self.subTest(kind=kind, color=color, directory=directory):
-                sprite = loader.load_idle_sprite(kind, color)
-                self.assertIsNotNone(sprite.img)
-                height, width, channels = sprite.img.shape
-                self.assertEqual((width, height), (64, 64))
-                self.assertEqual(channels, 4)  # RGBA: transparency must be preserved
+        sprite = loader.load_idle_sprite(kind, color)
+        assert sprite.img is not None
+        height, width, channels = sprite.img.shape
+        assert (width, height) == (64, 64)
+        assert channels == 4  # RGBA: transparency must be preserved
 
     def test_caching_returns_same_instance(self) -> None:
         loader = SpriteLoader(REAL_PIECES_ROOT)
         first = loader.load_idle_sprite("Q", "w")
         second = loader.load_idle_sprite("Q", "w")
-        self.assertIs(first, second)
+        assert first is second
 
     def test_invalid_kind_raises(self) -> None:
         loader = SpriteLoader(REAL_PIECES_ROOT)
-        with self.assertRaisesRegex(ValueError, "Invalid piece kind"):
+        with pytest.raises(ValueError, match='Invalid piece kind'):
             loader.load_idle_sprite("Z", "w")
 
     def test_invalid_color_raises(self) -> None:
         loader = SpriteLoader(REAL_PIECES_ROOT)
-        with self.assertRaisesRegex(ValueError, "Invalid piece color"):
+        with pytest.raises(ValueError, match='Invalid piece color'):
             loader.load_idle_sprite("Q", "x")
 
     def test_missing_sprite_file_raises(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             loader = SpriteLoader(Path(tmp_dir))
-            with self.assertRaises(FileNotFoundError):
+            with pytest.raises(FileNotFoundError):
                 loader.load_idle_sprite("Q", "w")
 
     def test_paths_independent_of_current_working_directory(self) -> None:
@@ -94,12 +111,12 @@ class TestSpriteLoader(unittest.TestCase):
             os.chdir(tmp_dir)
             try:
                 sprite = loader.load_idle_sprite("K", "b")
-                self.assertIsNotNone(sprite.img)
+                assert sprite.img is not None
             finally:
                 os.chdir(previous_cwd)
 
 
-class TestSpriteLoaderSortedFramePaths(unittest.TestCase):
+class TestSpriteLoaderSortedFramePaths:
     def test_sorted_frame_paths_orders_numerically(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             sprites_dir = Path(tmp_dir)
@@ -108,14 +125,16 @@ class TestSpriteLoaderSortedFramePaths(unittest.TestCase):
 
             paths = SpriteLoader._sorted_frame_paths(sprites_dir)
 
-            self.assertEqual([path.name for path in paths], ["1.png", "2.png", "10.png"])
+            assert [path.name for path in paths] == ['1.png', '2.png', '10.png']
 
 
-class TestSpriteLoaderAnimation(unittest.TestCase):
-    def setUp(self) -> None:
+class TestSpriteLoaderAnimation:
+    def setup_method(self) -> None:
         self._tmp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self._tmp_dir.cleanup)
         self.root = Path(self._tmp_dir.name)
+
+    def teardown_method(self) -> None:
+        self._tmp_dir.cleanup()
 
     def _write_state(
         self,
@@ -139,7 +158,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
 
         frame = loader.get_animation_frame("P", "w", "move", 0)
 
-        self.assertIsNotNone(frame.img)
+        assert frame.img is not None
 
     def test_config_json_not_reparsed_for_every_frame(self) -> None:
         self._write_state("PW", "move", [1, 2, 3])
@@ -151,10 +170,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         loader.get_animation_frame("P", "w", "move", 100)
         loader.get_animation_frame("P", "w", "move", 200)
 
-        self.assertEqual(
-            loader.get_animation_frame("P", "w", "move", 0).pixels.shape[:2],
-            (64, 64),
-        )
+        assert loader.get_animation_frame('P', 'w', 'move', 0).pixels.shape[:2] == (64, 64)
 
     def test_already_loaded_frame_is_reused(self) -> None:
         self._write_state("PW", "move", [1, 2, 3])
@@ -163,7 +179,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         first = loader.get_animation_frame("P", "w", "move", 0)
         second = loader.get_animation_frame("P", "w", "move", 0)
 
-        self.assertIs(first, second)
+        assert first is second
 
     def test_png_not_reloaded_for_a_cached_frame(self) -> None:
         self._write_state("PW", "move", [1, 2, 3], frames_per_sec=1, is_loop=False)
@@ -174,7 +190,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         loader.get_animation_frame("P", "w", "move", 0)
         loader.get_animation_frame("P", "w", "move", 0)
 
-        self.assertEqual(len(image_factory.created_images), 1)
+        assert len(image_factory.created_images) == 1
 
     def test_move_and_jump_use_separate_cache_entries(self) -> None:
         self._write_state("PW", "move", [1, 2, 3])
@@ -184,7 +200,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         move_frame = loader.get_animation_frame("P", "w", "move", 0)
         jump_frame = loader.get_animation_frame("P", "w", "jump", 0)
 
-        self.assertIsNot(move_frame, jump_frame)
+        assert move_frame is not jump_frame
 
     def test_different_kind_and_color_use_separate_cache_entries(self) -> None:
         self._write_state("PW", "move", [1, 2, 3])
@@ -194,7 +210,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         white_frame = loader.get_animation_frame("P", "w", "move", 0)
         black_frame = loader.get_animation_frame("P", "b", "move", 0)
 
-        self.assertIsNot(white_frame, black_frame)
+        assert white_frame is not black_frame
 
     def test_malformed_json_raises_clear_error(self) -> None:
         state_dir = self.root / "PW" / "states" / "move"
@@ -202,7 +218,13 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         (state_dir / "config.json").write_text("{not valid json", encoding="utf-8")
         loader = SpriteLoader(self.root)
 
-        with self.assertRaisesRegex(ValueError, "[Mm]alformed"):
+        with pytest.raises(ValueError, match='[Mm]alformed'):
+            loader.get_animation_frame("P", "w", "move", 0)
+
+    def test_missing_animation_config_raises_clear_error(self) -> None:
+        loader = SpriteLoader(self.root)
+
+        with pytest.raises(FileNotFoundError, match="animation config"):
             loader.get_animation_frame("P", "w", "move", 0)
 
     def test_missing_graphics_metadata_raises_clear_error(self) -> None:
@@ -213,71 +235,62 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         )
         loader = SpriteLoader(self.root)
 
-        with self.assertRaisesRegex(ValueError, "graphics"):
+        with pytest.raises(ValueError, match='graphics'):
             loader.get_animation_frame("P", "w", "move", 0)
 
-    def test_boolean_frames_per_sec_values_are_rejected(self) -> None:
+    @pytest.mark.parametrize(("index", "value"), tuple(enumerate((True, False))))
+    def test_boolean_frames_per_sec_values_are_rejected(
+        self, index: int, value: bool
+    ) -> None:
         loader = SpriteLoader(self.root)
 
-        for index, value in enumerate((True, False)):
-            with self.subTest(frames_per_sec=value):
-                state = f"boolean_fps_{index}"
-                self._write_state("PW", state, [1], frames_per_sec=value)
+        state = f"boolean_fps_{index}"
+        self._write_state("PW", state, [1], frames_per_sec=value)
 
-                with self.assertRaisesRegex(
-                    ValueError,
-                    r"'frames_per_sec' must be a positive number",
-                ):
-                    loader.get_animation_frame("P", "w", state, 0)
+        with pytest.raises(ValueError, match="'frames_per_sec' must be a positive number"):
+            loader.get_animation_frame("P", "w", state, 0)
 
-    def test_non_numeric_frames_per_sec_values_are_rejected(self) -> None:
+    @pytest.mark.parametrize(
+        ("index", "value"), tuple(enumerate((None, "12", "fast", [], {})))
+    )
+    def test_non_numeric_frames_per_sec_values_are_rejected(
+        self, index: int, value: object
+    ) -> None:
         loader = SpriteLoader(self.root)
 
-        for index, value in enumerate((None, "12", "fast", [], {})):
-            with self.subTest(frames_per_sec=value):
-                state = f"non_numeric_fps_{index}"
-                self._write_state("PW", state, [1], frames_per_sec=value)
+        state = f"non_numeric_fps_{index}"
+        self._write_state("PW", state, [1], frames_per_sec=value)
 
-                with self.assertRaisesRegex(
-                    ValueError,
-                    r"'frames_per_sec' must be a positive number",
-                ):
-                    loader.get_animation_frame("P", "w", state, 0)
+        with pytest.raises(ValueError, match="'frames_per_sec' must be a positive number"):
+            loader.get_animation_frame("P", "w", state, 0)
 
-    def test_non_finite_frames_per_sec_values_are_rejected(self) -> None:
+    @pytest.mark.parametrize(
+        ("index", "value"),
+        tuple(enumerate((float("nan"), float("inf"), float("-inf")))),
+    )
+    def test_non_finite_frames_per_sec_values_are_rejected(
+        self, index: int, value: float
+    ) -> None:
         loader = SpriteLoader(self.root)
 
-        for index, value in enumerate(
-            (float("nan"), float("inf"), float("-inf"))
-        ):
-            with self.subTest(frames_per_sec=value):
-                state = f"non_finite_fps_{index}"
-                self._write_state("PW", state, [1], frames_per_sec=value)
+        state = f"non_finite_fps_{index}"
+        self._write_state("PW", state, [1], frames_per_sec=value)
 
-                with self.assertRaisesRegex(
-                    ValueError,
-                    r"'frames_per_sec' must be a positive number",
-                ):
-                    loader.get_animation_frame("P", "w", state, 0)
+        with pytest.raises(ValueError, match="'frames_per_sec' must be a positive number"):
+            loader.get_animation_frame("P", "w", state, 0)
 
     def test_zero_frames_per_sec_is_rejected(self) -> None:
         self._write_state("PW", "move", [1], frames_per_sec=0)
         loader = SpriteLoader(self.root)
 
-        with self.assertRaisesRegex(
-            ValueError,
-            r"'frames_per_sec' must be a positive number",
-        ):
+        with pytest.raises(ValueError, match="'frames_per_sec' must be a positive number"):
             loader.get_animation_frame("P", "w", "move", 0)
 
     def test_negative_frames_per_sec_is_rejected(self) -> None:
         self._write_state("PW", "move", [1], frames_per_sec=-1)
         loader = SpriteLoader(self.root)
 
-        with self.assertRaisesRegex(
-            ValueError,
-            r"'frames_per_sec' must be a positive number",
-        ):
+        with pytest.raises(ValueError, match="'frames_per_sec' must be a positive number"):
             loader.get_animation_frame("P", "w", "move", 0)
 
     def test_positive_integer_frames_per_sec_remains_supported(self) -> None:
@@ -288,8 +301,8 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         loader.get_animation_frame("P", "w", "move", 0)
 
         frames_per_sec = frame_selector.calls[0][1]
-        self.assertIs(type(frames_per_sec), int)
-        self.assertEqual(frames_per_sec, 12)
+        assert type(frames_per_sec) is int
+        assert frames_per_sec == 12
 
     def test_positive_float_frames_per_sec_remains_supported(self) -> None:
         self._write_state("PW", "move", [1], frames_per_sec=12.5)
@@ -299,22 +312,23 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         loader.get_animation_frame("P", "w", "move", 0)
 
         frames_per_sec = frame_selector.calls[0][1]
-        self.assertIs(type(frames_per_sec), float)
-        self.assertEqual(frames_per_sec, 12.5)
+        assert type(frames_per_sec) is float
+        assert frames_per_sec == 12.5
 
-    def test_non_boolean_is_loop_values_are_rejected(self) -> None:
+    @pytest.mark.parametrize(
+        ("index", "value"),
+        tuple(enumerate(("false", "true", 0, 1, None, [], {}))),
+    )
+    def test_non_boolean_is_loop_values_are_rejected(
+        self, index: int, value: object
+    ) -> None:
         loader = SpriteLoader(self.root)
 
-        for index, value in enumerate(("false", "true", 0, 1, None, [], {})):
-            with self.subTest(is_loop=value):
-                state = f"non_boolean_is_loop_{index}"
-                self._write_state("PW", state, [1], is_loop=value)
+        state = f"non_boolean_is_loop_{index}"
+        self._write_state("PW", state, [1], is_loop=value)
 
-                with self.assertRaisesRegex(
-                    TypeError,
-                    r"'is_loop' must be a boolean",
-                ):
-                    loader.get_animation_frame("P", "w", state, 0)
+        with pytest.raises(TypeError, match="'is_loop' must be a boolean"):
+            loader.get_animation_frame("P", "w", state, 0)
 
     def test_true_is_loop_is_preserved_exactly(self) -> None:
         self._write_state("PW", "move", [1], is_loop=True)
@@ -323,7 +337,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
 
         loader.get_animation_frame("P", "w", "move", 0)
 
-        self.assertIs(frame_selector.calls[0][3], True)
+        assert frame_selector.calls[0][3] is True
 
     def test_false_is_loop_is_preserved_exactly(self) -> None:
         self._write_state("PW", "move", [1], is_loop=False)
@@ -332,7 +346,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
 
         loader.get_animation_frame("P", "w", "move", 0)
 
-        self.assertIs(frame_selector.calls[0][3], False)
+        assert frame_selector.calls[0][3] is False
 
     def test_missing_sprite_frames_raises_clear_error(self) -> None:
         state_dir = self.root / "PW" / "states" / "move"
@@ -341,7 +355,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         (state_dir / "config.json").write_text(json.dumps(config), encoding="utf-8")
         loader = SpriteLoader(self.root)
 
-        with self.assertRaises(FileNotFoundError):
+        with pytest.raises(FileNotFoundError):
             loader.get_animation_frame("P", "w", "move", 0)
 
     def test_short_rest_state_loops_past_its_final_frame(self) -> None:
@@ -352,7 +366,7 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         first = loader.get_animation_frame("P", "w", "short_rest", 0)
         wrapped = loader.get_animation_frame("P", "w", "short_rest", 2000)
 
-        self.assertIs(first, wrapped)
+        assert first is wrapped
 
     def test_long_rest_state_holds_its_final_frame_when_non_looping(self) -> None:
         self._write_state("PW", "long_rest", [1, 2], frames_per_sec=1, is_loop=False)
@@ -363,8 +377,4 @@ class TestSpriteLoaderAnimation(unittest.TestCase):
         last_frame = loader.get_animation_frame("P", "w", "long_rest", 1000)
         held_frame = loader.get_animation_frame("P", "w", "long_rest", 50000)
 
-        self.assertIs(last_frame, held_frame)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert last_frame is held_frame

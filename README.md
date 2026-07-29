@@ -79,6 +79,22 @@ Run the complete unit and integration suite from the repository root:
 python -m pytest -q
 ```
 
+## Measuring Coverage
+
+Run the branch-aware whole-project coverage workflow from the repository root:
+
+```powershell
+python -m coverage erase
+python -m coverage run -m pytest
+python -m coverage report -m
+python -m coverage html
+```
+
+The committed configuration measures the complete `kungfu_chess` package,
+reports missing lines, and enforces the verified baseline of 94.91%. The HTML
+report is generated at `htmlcov/index.html`. The `.coverage` data file and
+`htmlcov/` report directory are generated artifacts and must not be committed.
+
 ## Project Structure
 
 ```text

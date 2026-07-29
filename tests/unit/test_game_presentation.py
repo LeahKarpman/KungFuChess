@@ -58,6 +58,11 @@ def _move(
     )
 
 
+def test_non_positive_board_height_is_rejected() -> None:
+    with pytest.raises(ValueError, match="board_height"):
+        GamePresentation(PIECE_VALUES, board_height=0)
+
+
 def test_scores_start_at_zero() -> None:
     snapshot = _presentation().snapshot()
 
@@ -96,6 +101,26 @@ def test_score_is_awarded_to_explicit_capturing_color() -> None:
     snapshot = presentation.snapshot()
     assert snapshot.white_score == 0
     assert snapshot.black_score == PIECE_VALUES["Q"]
+
+
+def test_capture_with_unsupported_capturing_color_is_rejected() -> None:
+    presentation = _presentation()
+
+    with pytest.raises(ValueError, match="capturing piece color"):
+        presentation.apply((_capture("P", by_color="x"),))
+
+    assert presentation.snapshot().white_score == 0
+    assert presentation.snapshot().black_score == 0
+
+
+def test_capture_requires_a_configured_piece_value() -> None:
+    presentation = _presentation()
+
+    with pytest.raises(ValueError, match="Missing configured value"):
+        presentation.apply((_capture("X"),))
+
+    assert presentation.snapshot().white_score == 0
+    assert presentation.snapshot().black_score == 0
 
 
 def test_same_capture_event_is_counted_exactly_once() -> None:
@@ -184,6 +209,30 @@ def test_promotion_appends_promoted_kind() -> None:
     presentation.apply((move, PiecePromoted("white_pawn", "Q")))
 
     assert presentation.snapshot().white_actions[0].notation == "P e7-e8=Q"
+
+
+def test_promotion_without_a_completed_action_leaves_histories_unchanged() -> None:
+    presentation = _presentation()
+
+    presentation.apply((PiecePromoted("unknown_piece", "Q"),))
+
+    snapshot = presentation.snapshot()
+    assert snapshot.white_actions == ()
+    assert snapshot.black_actions == ()
+
+
+def test_promotion_updates_the_latest_matching_action_not_the_latest_action() -> None:
+    presentation = _presentation()
+    pawn_move = _move(piece_id="white_pawn", kind="P")
+    later_rook_move = _move(piece_id="white_rook")
+
+    presentation.apply(
+        (pawn_move, later_rook_move, PiecePromoted("white_pawn", "Q"))
+    )
+
+    actions = presentation.snapshot().white_actions
+    assert actions[0].notation.endswith("=Q")
+    assert not actions[1].notation.endswith("=Q")
 
 
 def test_started_intermediate_rest_and_rejected_requests_create_no_log_entry() -> None:
