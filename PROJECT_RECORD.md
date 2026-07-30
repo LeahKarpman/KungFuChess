@@ -1,6 +1,6 @@
 # Kung-Fu Chess — Project Record
 
-Last updated: 2026-07-28
+Last updated: 2026-07-30
 
 ## Record Policy
 
@@ -1357,6 +1357,347 @@ Result:
 - `AGENTS.md`
 - `PROJECT_CONTEXT.md`
 - `README.md`
+- `PROJECT_STATUS.md`
+- `PROJECT_RECORD.md`
+
+### Source Code and Tests Updated
+
+- None
+
+## 2026-07-30 — Server and Scalable-System Materials Intake
+
+### Sources
+
+- `CTD 26 Game requirements.remuxed.mp4`
+- `CTD - Server.mp3`
+- `CTD.mp3`
+- First official email: scalable-server assignment and capacity questions
+- Second official email: proposed scalable-server design
+- User confirmation that the working target includes two computers over the
+  internet and multiple simultaneous games through rooms
+- Latest uploaded repository archive at intake base
+  `a1611ef docs: record pytest temp isolation`
+
+The dates of the recordings and emails were not supplied. The material was
+therefore ordered by explicit content and the source-of-truth policy rather
+than by an assumed recording date.
+
+### Authority Classification
+
+- The user's internet and multi-room decisions are current explicit
+  requirements.
+- The two emails are the current official assignment and official reference
+  architecture.
+- The recordings provide official teaching context, baseline-server behavior,
+  examples, and design questions.
+- Concrete technology choices described as "recommended" remain
+  recommendations unless the assignment explicitly requires them.
+- Capacity calculations and the resulting shard-lifecycle conclusions below
+  are design inferences, not quoted requirements.
+
+### Media Extraction Notes
+
+The three media files were transcribed and the relevant sections were checked
+against their audio and visible slides. Automatic transcription was imperfect
+for some English technical terms, so conclusions were accepted only when the
+surrounding explanation, repeated wording, or slide text established the
+meaning.
+
+Useful anchors include:
+
+- `CTD 26 Game requirements.remuxed.mp4`, approximately 04:24-04:34:
+  a move-log timestamp is the time at which the command reaches the server.
+- The same video, approximately 06:53-08:07: the non-functional target is
+  potential scalability to millions of simultaneous players; matchmaking,
+  software structure, network structure, and server design must not block
+  move flow.
+- `CTD - Server.mp3`, approximately 15:47 onward: the local game is split into
+  clients and a server, followed by accounts, ratings, matchmaking, rooms,
+  disconnect handling, synchronization, and logging.
+- `CTD.mp3`: processes, threads, Docker, orchestration, databases, gateways,
+  messaging, network volume, consistency, availability, failure, and backup
+  considerations are introduced as system-design tools and questions.
+
+### Confirmed Transition
+
+The current local flow is:
+
+```text
+Input -> Controller -> GameEngine -> Snapshot/Events -> Renderer
+```
+
+The server phase changes ownership to:
+
+```text
+Client input/presentation <-> Authoritative server GameEngine
+```
+
+The server owns game time, legality, command ordering, state transitions,
+results, and recovery state. A client sends intentions and renders
+authoritative snapshots and events. The client must not run a competing source
+of game truth or freeze its graphical loop while waiting for network I/O.
+
+Each active room requires one authoritative engine owner at a time. Multiple
+rooms must remain isolated even when one long-lived server process hosts many
+of them.
+
+### Recorded Baseline-Server Behavior
+
+The baseline server material establishes or demonstrates:
+
+- Client and server run in separate processes.
+- Two clients send commands and receive authoritative updates.
+- WebSocket is recommended for convenient bidirectional communication.
+- The first connected player may be White and the second Black in the first
+  working two-player increment.
+- The server verifies usernames and credentials.
+- New ratings start at 1200 and are updated using ELO.
+- Random `Play` matchmaking and named-room play are separate flows.
+- Random matchmaking searches within 100 ELO points and reports failure after
+  one minute without a match.
+- A player disconnected during a game receives a 20-second reconnect window;
+  expiry causes an automatic loss and rating update.
+- Initial room names are unique identifiers; duplicate names are rejected.
+- The room creator and first joining participant are players; later joiners
+  are spectators in the demonstrated model.
+- Explicit named-room play is not restricted by the random-match ELO window.
+- Client and server both produce diagnostic logs.
+- Commands that arrive nearly simultaneously require deterministic server
+  ordering.
+- A reconnecting client must receive authoritative current state. Buffered or
+  delayed local clicks must not be replayed blindly.
+
+The recording presents SQLite as a simple option for the early local
+prototype. This does not make SQLite suitable for the global scale target.
+
+### Official Work Order
+
+The first email explicitly prioritizes sequence:
+
+> מי שעדיין אין לה שרת עובד - בבקשה שתעבוד לפי הסדר. זה יותר חשוב.
+
+The combined delivery order is:
+
+1. Complete a basic working authoritative server.
+2. Learn Docker and study Kubernetes and K3s.
+3. Write the scalable-system reasoning in `Server_Design.md`.
+4. Implement a small working multi-container version with Docker Compose.
+5. Preserve a credible Kubernetes or K3s scale-out path.
+
+The second email reinforces the implementation principle:
+
+> עדיף משהו קטן שעובד מאשר לנסות לבנות הכל ובסוף שזה לא יעבוד.
+
+### Official Scale Requirements
+
+`Server_Design.md` must reason about:
+
+- 100 million registered users and the durable database choice.
+- 10 million concurrent players distributed globally.
+- How multiple containers divide responsibilities.
+- How any player can play any other player or enter any requested room.
+- How a gateway discovers the server currently responsible for a room.
+- One average game action per active user every two seconds.
+- Average game duration between 30 and 90 seconds.
+- The implications of those rates for network capacity and container roles.
+
+The assignment requires the design document to be pushed to Git. No Git write
+was performed during this material-intake phase.
+
+### Official Reference Architecture
+
+The second email proposes:
+
+- `API Gateway`: login, room administration, and history outside the
+  real-time game path.
+- `WebSocket Gateway`: live client connections and authoritative state
+  updates.
+- `Matchmaker`: pairing players.
+- `Game Allocator`: assigning each room to a game-server shard.
+- `Game Server Shards`: hosting authoritative `GameEngine` instances.
+- `Observability`: logs, metrics, health checks, and load tests.
+
+It recommends:
+
+- NATS or Redis Pub/Sub for internal communication.
+- Redis for sessions, active-room location, reconnect data, and matchmaking
+  queues.
+- PostgreSQL for durable users, games, results, and move history.
+- Docker Compose for the small runnable version.
+- Kubernetes or K3s for managed containers and horizontal scaling.
+
+The primary authority rule is preserved verbatim:
+
+> ה GameEngine נשאר ה single source of truth.
+
+Neither the client nor either gateway decides game rules.
+
+### Capacity Derivations
+
+The stated workload implies:
+
+- `10,000,000 / 2 = 5,000,000` incoming game commands per second on average.
+- With two active players per game, approximately 5,000,000 simultaneous games
+  or rooms.
+- Each active game receives approximately one player command per second on
+  average.
+- If every game lasts 30-90 seconds, approximately 55,556-166,667 games start
+  and finish per second in steady state; a 60-second midpoint implies about
+  83,333 per second.
+
+Illustrative network estimates, which must be labeled with their assumptions:
+
+- At 100-250 bytes on the wire per incoming command, ingress alone is about
+  500 MB/s-1.25 GB/s, or 4-10 Gbit/s, before acknowledgements, TLS effects,
+  retries, snapshots, or other traffic.
+- If every command produces a 200-1,000-byte update to both players, outbound
+  game updates are about 2-10 GB/s, or 16-80 Gbit/s, before spectators and
+  protocol overhead.
+- A design that instead sends a 500-byte full snapshot ten times per second to
+  every active user would send about 50 GB/s, or 400 Gbit/s, before protocol
+  overhead. The real-time update strategy therefore changes the result by an
+  order of magnitude.
+- Five million actions per second are 432 billion actions per day. If every
+  action or completed move were retained as a raw 100-250-byte record, the
+  payload alone would be about 43.2-108 TB per day before indexes, replication,
+  backups, or database overhead.
+
+The exact result depends on message encoding, update strategy, batching,
+compression, TLS framing, acknowledgements, spectator fan-out, and retry
+behavior. The assignment therefore cannot be answered with one bandwidth
+number without documenting assumptions.
+
+### Design Inferences
+
+- One physical server or one gateway cannot be the global real-time data path
+  for the stated workload.
+- Long-lived game-server shards should host many short-lived room engines.
+  Creating a Docker container per 30-90-second game would require
+  tens of thousands of container starts and stops per second and is not the
+  proposed shard model.
+- A globally discoverable room directory must map `room_id` to its current
+  region and shard so any gateway can route or reconnect a participant.
+- Each room needs exactly one active authoritative owner. Ownership transfer
+  requires a lease or equivalent fencing rule so two shards cannot both
+  advance the same game.
+- Commands need stable IDs or sequence numbers so retries are idempotent and
+  stale commands can be rejected.
+- Reconnect should restore an authoritative snapshot plus an agreed event or
+  sequence boundary, not trust client state.
+- The protocol should avoid sending a complete board on every graphical frame.
+  A likely design is to send authoritative timestamped action events and
+  periodic correction snapshots, allowing the client to animate presentation
+  between corrections without becoming authoritative.
+- Regional WebSocket gateways and game shards are a likely latency strategy,
+  while global matchmaking and room discovery must still find the correct
+  region.
+- PostgreSQL should own durable truth; Redis and Pub/Sub must not silently
+  become the only copy of completed results or account data.
+- "PostgreSQL" at the stated scale means a partitioned or sharded durable data
+  service with a retention and archival policy, not one unpartitioned database
+  process receiving every move as an individual synchronous write.
+- Scaling signals should include active connections, active rooms, command
+  rate, event-loop or CPU saturation, queue depth, and latency rather than
+  container count alone.
+
+These are conclusions to justify and refine in `Server_Design.md`, not
+implementation completed during intake.
+
+### Failure and Operations Questions Extracted from the Lecture
+
+The scalable design must describe:
+
+- What happens when a game shard, gateway, database, or messaging component
+  fails.
+- Whether each state category prefers consistency or availability and why.
+- Health checks and removal of unhealthy instances.
+- Recovery of active room ownership.
+- Backups and restoration for durable data.
+- Disk-full behavior, log retention, and protection against unbounded storage.
+- Metrics and load tests that validate the capacity assumptions.
+- The effect of threads versus processes: threads share memory and are useful
+  around I/O waits, while processes and containers improve isolation and can
+  be distributed across machines.
+
+### Clarifications, Conflicts, and Non-Requirements
+
+- Local development is an intermediate step; the user's later explicit
+  requirement is two computers over the internet.
+- SQLite is not categorically prohibited. It is acceptable for a small local
+  prototype but unsuitable as the single durable store for 100 million users
+  because it is an embedded single-file database without the required
+  multi-node operational model.
+- The recorded Windows native popup is an older input-workflow suggestion. It
+  conflicts with the confirmed project rule that displayed graphics use
+  `Img`, so no popup is currently required.
+- The UI assignment's Observer design-pattern requirement is not spectator
+  mode. The server recording separately describes actual spectators in named
+  rooms.
+- Docker packages isolated application processes and dependencies. It does not
+  itself perform cluster scheduling.
+- Kubernetes and K3s are scale-out orchestration targets, not requirements to
+  deploy the first two-client server on a production cluster.
+- A gateway can authenticate, rate-limit, and route, but it cannot validate
+  chess legality.
+- The first recording's two-player color assignment is an incremental example;
+  the final room protocol still needs an explicit role and authorization
+  contract.
+
+### Unresolved Decisions
+
+- Registration and login API.
+- Password storage and credential-security policy.
+- Session and token format.
+- Exact WebSocket message schema, compatibility, acknowledgements, and error
+  model.
+- Command IDs, sequence numbers, clock source, and ordering contract.
+- Initial snapshot and incremental update format.
+- Reconnect identity and room-resume flow.
+- Room lifetime, room cleanup, ownership transfer, and spectator limits.
+- Spectator visibility, chat, permissions, and whether spectators are in the
+  first milestone.
+- Match cancellation and concurrent queue/join requests.
+- ELO formula details, provisional ratings, draws, abandonment, and whether
+  named-room games affect rating.
+- Durable history scope and retention.
+- Regional topology and cross-region matchmaking.
+- Availability, latency, durability, recovery, and backup targets.
+- Small Compose topology and the boundary between its initially combined
+  services.
+- Whether later design-review recordings supersede any recorded baseline
+  behavior.
+
+### Repository Evidence
+
+The latest archive is still a local application:
+
+- `app.py` is a local text entry point.
+- `ui_app.py` creates the graphical game locally.
+- `requirements.txt` contains no network-server or database framework.
+- No server runtime, socket or WebSocket protocol, authentication,
+  matchmaking, room persistence, Dockerfile, Compose file, Kubernetes
+  manifest, or `Server_Design.md` was found.
+
+Consequently, the official sequence requires basic-server design and
+implementation before production-scale service implementation.
+
+### Project Actions
+
+- Added stable server authority, client, runtime, baseline behavior, and
+  scalable-target boundaries to `PROJECT_CONTEXT.md`.
+- Updated `PROJECT_STATUS.md` to make the basic authoritative server the active
+  phase and record the current implementation gap.
+- Preserved the Observer review as deferred UI work rather than confusing it
+  with spectators.
+- Did not create `Server_Design.md` yet because this turn was a material-intake
+  and synthesis phase, additional design-review recordings are expected, and
+  the current unresolved decisions materially affect the design.
+- Did not modify source code, tests, dependencies, or deployment files.
+- Did not perform Git writes.
+
+### Files Updated
+
+- `PROJECT_CONTEXT.md`
 - `PROJECT_STATUS.md`
 - `PROJECT_RECORD.md`
 

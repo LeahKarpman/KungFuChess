@@ -1,6 +1,6 @@
 # Kung-Fu Chess — Project Context
 
-Last updated: 2026-07-28
+Last updated: 2026-07-30
 
 ## 1. Purpose
 
@@ -166,6 +166,33 @@ The current design must preserve a practical extension path:
 
 The current game continues to use its confirmed standard Kung-Fu Chess rules, including automatic queen promotion. Future configurability does not change current behavior.
 
+### 6.4 Server and Scalability Principles
+
+The project is moving from a local application to an authoritative
+client-server system.
+
+The server design must preserve:
+
+- One authoritative `GameEngine` for each active room.
+- Server ownership of game time, legality, state transitions, results, and
+  command ordering.
+- Client ownership of input and presentation only.
+- Isolation between rooms.
+- A stable way to route a player or spectator to the room's current game
+  server.
+- Separation between durable data and short-lived operational state.
+- Non-blocking client network activity so waiting for the server does not
+  freeze the graphical loop.
+- Explicit handling of disconnects, reconnects, stale commands, service
+  failure, and recovery.
+- Incremental delivery: a small working server precedes the scalable
+  multi-service implementation.
+
+The scalable target is a system-design requirement, not a requirement to run
+the development environment at production scale. The implementation must first
+prove the behavior with a small working deployment and then preserve a credible
+path to horizontal scaling.
+
 ## 7. Layer Responsibilities
 
 ### 7.1 Model
@@ -303,6 +330,76 @@ The supplied graphics material treats animation as state-based presentation usin
 ### 7.7 Text and Script Infrastructure
 
 Board parsing, board printing, script parsing, script execution, and text-based integration helpers remain separate from graphical UI and game-rule logic.
+
+### 7.8 Network Client
+
+The network client owns the graphical application and its connection to the
+server.
+
+It may:
+
+- Translate local input into protocol commands.
+- Send authenticated move, jump, matchmaking, and room requests.
+- Receive authoritative snapshots and events.
+- Render the state and status supplied by the server.
+- Reconnect and request a fresh authoritative snapshot.
+
+It must not:
+
+- Run a competing authoritative `GameEngine`.
+- Advance authoritative game time.
+- Decide whether a move or jump is legal.
+- Trust locally predicted state over a server correction.
+- Replay commands created while disconnected without server-side validation.
+- Block the graphical event loop while waiting for network I/O.
+
+### 7.9 Server Runtime
+
+The server owns all authoritative games.
+
+For every room, it must:
+
+- Own exactly one authoritative `GameEngine` at a time.
+- Serialize or deterministically order commands that arrive concurrently.
+- Associate each command with an authenticated participant and permitted role.
+- Reject commands from a player who does not control the requested color.
+- Advance the authoritative clock independently of client frame rates.
+- Publish authoritative state and event updates to the room's participants.
+- Use server receipt time for the move-log timestamp required by the official
+  game material.
+
+A gateway may authenticate, route, rate-limit, and transport messages, but it
+must not decide game rules. A client, gateway, cache, or presentation component
+must never become a competing source of game truth.
+
+### 7.10 Official Scalable Reference Architecture
+
+The official guidance proposes the following default design for the scalable
+target:
+
+- `API Gateway` for non-real-time operations such as login, rooms, and history.
+- `WebSocket Gateway` for live client connections and state updates.
+- `Matchmaker` for pairing players.
+- `Game Allocator` for selecting the game-server shard that owns a room.
+- `Game Server Shards` for running authoritative `GameEngine` instances.
+- `Observability` for logs, metrics, health checks, and load tests.
+
+This is an official reference architecture rather than an instruction to
+implement every production-scale component before a basic server works. A
+different design requires an explicit reason and must still satisfy the
+responsibility boundaries above.
+
+The official technology recommendations are:
+
+- NATS or Redis Pub/Sub for internal messaging.
+- Redis for short-lived state such as sessions, active-room routing,
+  reconnect information, and matchmaking queues.
+- PostgreSQL for durable users, games, results, and move history.
+- Docker Compose for a small runnable multi-container deployment.
+- Kubernetes or K3s for managed container deployment and horizontal scaling.
+
+SQLite remains suitable only for the earlier small local-server exercise. It
+is not the durable database for the stated global scalable target.
 
 ## 8. Confirmed Domain Decisions
 
@@ -487,6 +584,67 @@ Input mapping must respect the rendered board origin and must not independently 
 - The application supplies default player names.
 - The default names are `White Player` and `Black Player`.
 - The current requirement does not include user-entered names or a name-entry workflow.
+
+### 8.17 Baseline Server Behavior
+
+The recorded baseline server assignment establishes this progression:
+
+- Develop the first server locally, then support two clients on different
+  computers over the internet.
+- Run client presentation and server game logic in separate processes.
+- Let two clients send commands and receive authoritative updates.
+- In the first two-player milestone, assign White to the first connected
+  player and Black to the second.
+- Keep usernames, credential verification, and ratings on the server.
+- Start every new rating at 1200 and update ratings using ELO.
+- Keep random `Play` matchmaking separate from named-room play.
+- Match random players within 100 rating points and report failure after one
+  minute without a match.
+- On an in-game disconnect, allow a 20-second reconnect countdown before an
+  automatic loss and corresponding rating update.
+- Use unique room names as the initial room identifiers.
+- Treat the room creator and the first joining participant as the two players;
+  later joiners are spectators in the recorded demonstration model.
+- Do not apply the random-match rating restriction to an explicitly agreed
+  named room.
+- Write diagnostic logs on both the client and the server.
+- Handle near-simultaneous commands deterministically.
+- Resynchronize a reconnecting client from authoritative state instead of
+  applying delayed local clicks blindly.
+
+The exact registration protocol, password storage policy, authentication-token
+format, reconnect message contract, room lifetime, and spectator permissions
+are not yet defined by the supplied materials.
+
+The recorded native Windows popup was an input-workflow suggestion for the
+server exercise. It does not override the later confirmed rule that displayed
+project graphics use `Img`; no popup requirement is active without an explicit
+resolution of that conflict.
+
+### 8.18 Scalable-Server Target
+
+The scalable-system design must reason explicitly about:
+
+- 100 million registered users.
+- 10 million concurrently active users distributed globally.
+- One game action per active user every two seconds on average.
+- Games lasting between 30 and 90 seconds on average.
+- Room-to-shard ownership and routing.
+- Global matchmaking and named-room discovery.
+- Network capacity in both directions, including protocol overhead and
+  fan-out.
+- Service failure, database failure, disk exhaustion, health checks, backup,
+  and recovery.
+- The consistency-versus-availability trade-off for each type of state.
+- The lifecycle and scaling policy of long-lived service containers and
+  short-lived game rooms.
+
+The required design deliverable is `Server_Design.md`. It must explain the
+services, each service's responsibility, communication paths, data ownership,
+capacity assumptions, failure behavior, and design rationale.
+
+The required small implementation target uses Docker Compose. Kubernetes and
+K3s are learning and scale-out targets after the basic server exists.
 
 ## 9. Repository Organization
 

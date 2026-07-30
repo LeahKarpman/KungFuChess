@@ -1,31 +1,42 @@
 # Kung-Fu Chess — Current Project Status
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 ## 1. Current Position
 
 Repository state:
 
 - `main` is aligned with `origin/main`.
-- Commit `4ba5094` prevents sandboxed coding-agent Pytest runs from reusing the
-  human user's default temporary root.
+- Current intake base: `a1611ef docs: record pytest temp isolation`.
 - PR #29 merged the complete testing-standard change set into `main`.
 - Current verified implementation commit: `6d72bc7eaede5e528771fe3bd044573d2243ef62`.
 - Verified implementation subject: `feat(ui): display default player names`.
 - Verified implementation commit date: 2026-07-29 15:17:36 +0300.
 - The official root-level project documents are tracked in Git.
-- Obsolete `CTD26` ignore and Pyright-exclusion entries have been removed after the local reference directory was deleted.
-- The testing work uses three focused commits: native-Pytest migration,
-  reproducible coverage workflow, and meaningful remaining-path coverage.
-- Generated `.coverage` data and `htmlcov/` output remain ignored and untracked.
 
 The current repository includes a compact graphical dashboard with
 application-provided default player names, side scores, and per-color move
 panels.
 
-The next confirmed work is focused rather than a general UI rewrite:
+The graphical client and authoritative `GameEngine` still run in one local
+process. The repository currently has no network protocol, server entry point,
+account or room persistence, WebSocket transport, Docker configuration,
+Docker Compose deployment, or `Server_Design.md`.
 
-- Perform a focused Observer design review and introduce the pattern only if a genuine one-to-many notification relationship currently requires it.
+The active project phase is therefore the basic authoritative server, not the
+production-scale deployment. Official direction requires completing a small
+working server before implementing the proposed scalable service topology.
+
+The first externally confirmed target is:
+
+- Two graphical clients on different computers communicating over the
+  internet.
+- Multiple simultaneous games addressed through rooms.
+- One server-owned authoritative `GameEngine` per active room.
+- Client-side input and presentation with non-blocking network communication.
+
+The Observer design-pattern review remains recorded but is no longer the
+primary next task.
 
 ## 2. Current Verification
 
@@ -177,7 +188,69 @@ The moves-log completion work was merged in PR #24:
 
 The supplied play video is treated as a visual reference only. It demonstrates real-time board play, player identity, side information, move/status feeds, highlighting, and watcher information, but it does not by itself define an exact required layout or interaction contract.
 
-## 5. Testing-Standard Compliance
+## 5. Server Phase: Requirements and Current Gap
+
+### Current Gap
+
+Repository inspection confirms that the server phase has not yet been
+implemented:
+
+- `app.py` and `ui_app.py` remain local entry points.
+- The existing dependency list contains no network-server or database
+  dependency.
+- No server, socket, WebSocket, authentication, matchmaking, room, reconnect,
+  or persistence implementation was found.
+- No `Dockerfile`, Compose file, Kubernetes manifest, or `Server_Design.md` was
+  found.
+
+### Required Delivery Order
+
+1. Preserve the current `GameEngine` as the server-side authority.
+2. Separate the graphical client and game runtime into different processes.
+3. Make one small two-client game work with authoritative commands, snapshots,
+   and deterministic server timing.
+4. Add multiple isolated rooms and internet-capable client connections.
+5. Add the recorded baseline behavior for accounts, ELO, matchmaking,
+   disconnect/reconnect, spectators, and logs.
+6. Document the scalable design in `Server_Design.md`.
+7. Package a small working version with Docker Compose.
+8. Use Kubernetes or K3s only after the basic server works and scaling
+   responsibilities are established.
+
+### Official Scalable Reference
+
+The official proposed topology contains:
+
+- An API Gateway for login, rooms, and history.
+- A WebSocket Gateway for live connections and state updates.
+- A Matchmaker.
+- A Game Allocator.
+- Long-lived Game Server Shards that host authoritative room engines.
+- Logs, metrics, health checks, and load tests.
+
+The recommended data split is PostgreSQL for durable users, games, results,
+and move history, and Redis for sessions, active-room routing, reconnect state,
+and matchmaking queues. NATS or Redis Pub/Sub is recommended for internal
+messaging.
+
+### Open Decisions
+
+The supplied materials do not yet settle:
+
+- The exact client/server message schema and versioning policy.
+- The Python WebSocket framework and concurrency model.
+- Registration, password hashing, authentication tokens, and authorization.
+- Whether spectators are required in the first working increment.
+- Room expiration, ownership transfer, spectator permissions, and capacity.
+- Reconnect identity, snapshot, command-sequence, and stale-command contracts.
+- Regional placement, cross-region matching policy, and latency targets.
+- Concrete service-level objectives, retention periods, and backup targets.
+- The minimum Docker Compose service set for the first submitted version.
+
+The additional design-review recordings may resolve these decisions before
+`Server_Design.md` is finalized.
+
+## 6. Testing-Standard Compliance
 
 ### Native Pytest
 
@@ -220,7 +293,7 @@ coverage, measures all of `kungfu_chess`, reports missing lines, enforces the
 Every previously uncovered statement and partial branch now has a
 behavior-focused test, producing 100.00% statement-and-branch coverage.
 
-## 6. Architecture and Future Extensibility
+## 7. Architecture and Future Extensibility
 
 Positive evidence:
 
@@ -243,7 +316,7 @@ Binary-representation readiness remains plausible but has not received a complet
 
 User-defined-game readiness is not yet demonstrated. The future feature must not be implemented now, but a minimal replaceable boundary for piece definitions, movement rules, promotion policy, and visual definitions still requires architectural planning.
 
-## 7. Current Work, Recent Completions, and Risks
+## 8. Current Work, Recent Completions, and Risks
 
 Recently completed correctness work:
 
@@ -258,16 +331,30 @@ Recently completed correctness work:
    dashboard panels.
 9. Sandboxed Pytest runs isolated from the human user's default temporary root.
 
-Remaining official UI work:
+Active server work:
 
-- Apply the Observer design pattern at appropriate one-to-many notification boundaries, after a focused design review identifies a concrete need.
+1. Define the smallest authoritative client/server protocol and room lifecycle.
+2. Move `GameEngine` ownership and time advancement into the server runtime.
+3. Keep graphical client I/O non-blocking and resynchronize from server
+   snapshots.
+4. Prove two internet-connected clients and multiple isolated rooms.
+5. Add the remaining baseline behaviors incrementally, with tests.
+6. Write `Server_Design.md` from the confirmed requirements and design-review
+   feedback.
+7. Produce a small working Docker Compose deployment.
+
+Deferred UI work:
+
+- Apply the Observer design pattern at appropriate one-to-many notification
+  boundaries only after a focused review identifies a concrete need. This
+  requirement is separate from server-side spectator support.
 
 Remaining quality work:
 
 - Complete the binary-representation migration explanation.
 - Establish minimal future rule-definition extension boundaries without implementing custom games.
 
-## 8. Documentation and Process
+## 9. Documentation and Process
 
 The repository currently contains:
 
@@ -288,27 +375,37 @@ The deleted local `CTD26/` reference directory was not tracked. Its obsolete ent
 
 The player-name implementation and tests are contained in commit `6d72bc7`.
 
-## 9. Latest Documentation Update
+## 10. Latest Documentation Update
 
 Files updated:
 
-- `AGENTS.md`
 - `PROJECT_CONTEXT.md`
-- `README.md`
 - `PROJECT_STATUS.md`
 - `PROJECT_RECORD.md`
 
 Sources reconciled:
 
-- User-provided Pytest output showing 667 passed and 21 setup errors
-- Windows ACL evidence for `%TEMP%\pytest-of-02`
-- Isolated-base-temp workflow commit `4ba5094`
-- Complete-suite verification using a unique agent-owned `--basetemp`
+- `CTD 26 Game requirements.remuxed.mp4`
+- `CTD - Server.mp3`
+- `CTD.mp3`
+- Two official server-scaling emails supplied by the user
+- The latest uploaded repository archive
+- The user's confirmed internet and multi-room deployment targets
 
 Current verified branch:
 
 `main`
 
-Current verified testing-workflow commit:
+Current intake base:
 
-`4ba5094 fix(test): isolate sandbox pytest temp roots`
+`a1611ef docs: record pytest temp isolation`
+
+Source code and tests updated:
+
+- None
+
+Verification note:
+
+- The last recorded complete verification remains 688 passed with 100.00%
+  statement and branch coverage.
+- Tests were not rerun for this documentation-only material intake.
